@@ -25,8 +25,8 @@ export function CategorySidebarItem({
 
   const content = (
     <>
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-primary">
-        <Icon className="h-5 w-5" aria-hidden="true" />
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-primary">
+        <Icon className="h-4 w-4" aria-hidden="true" />
       </span>
       <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
       {typeof item.count === "number" ? (
@@ -54,7 +54,7 @@ export function CategorySidebarItem({
           aria-current={active ? "page" : undefined}
           aria-expanded={open}
           className={cn(
-            "flex min-h-12 w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "flex min-h-11 w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             active && "bg-accent font-semibold text-accent-foreground",
             open && "bg-accent text-accent-foreground",
           )}
@@ -67,7 +67,7 @@ export function CategorySidebarItem({
           href={item.href}
           aria-current={active ? "page" : undefined}
           className={cn(
-            "flex min-h-12 items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "flex min-h-11 items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             active && "bg-accent font-semibold text-accent-foreground",
           )}
         >

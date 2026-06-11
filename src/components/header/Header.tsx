@@ -10,7 +10,7 @@ import { UserDropdown } from "@/components/header/UserDropdown";
 
 export function Header() {
   return (
-    <header className="hidden border-b bg-background/95 backdrop-blur lg:block">
+    <header className="hidden border-b bg-white lg:block">
       <Container size="wide" className="flex h-16 items-center gap-3">
         <Logo />
         <div className="min-w-0 flex-1">

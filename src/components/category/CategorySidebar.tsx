@@ -48,11 +48,10 @@ export function CategorySidebar({ activeHref }: CategorySidebarProps) {
       aria-label="Danh muc san pham"
       className="relative z-30 flex h-full w-full flex-col border-r bg-card"
     >
-      <div className="shrink-0 border-b px-5 py-4">
-        <p className="text-sm font-semibold">Danh muc san pham</p>
-        <p className="mt-1 text-xs text-muted-foreground">Chon nhanh theo nhu cau mua sam</p>
+      <div className="shrink-0 border-b px-4 py-4">
+        <p className="text-sm font-semibold">Danh mục sản phẩm</p>
       </div>
-      <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
+      <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-4">
         {categoryMenu.map((item) => (
           <CategorySidebarItem
             key={item.href}
@@ -68,7 +67,7 @@ export function CategorySidebar({ activeHref }: CategorySidebarProps) {
           role="menu"
           className={cn(
             "absolute z-[80] rounded-md border bg-popover p-2 text-popover-foreground shadow-lg",
-            "left-[calc(100%+0.75rem)] top-[5.25rem] w-72",
+            "left-[calc(100%+0.5rem)] top-[5.25rem] w-72",
           )}
         >
           <Link

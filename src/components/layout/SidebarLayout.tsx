@@ -15,7 +15,7 @@ export function SidebarLayout({
 }: SidebarLayoutProps) {
   return (
     <Container size="wide" className={cn("px-0 py-4 lg:py-0", className)}>
-      <div className="grid lg:grid-cols-[308px_minmax(0,1fr)]">
+      <div className="grid lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside
           aria-label={sidebarLabel}
           className="relative z-30 hidden lg:block"
