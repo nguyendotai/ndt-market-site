@@ -17,7 +17,7 @@ import { cartService } from "@/services/cart.service";
 import { productService } from "@/services/product.service";
 import { reviewService, type ReviewDto } from "@/services/review.service";
 import { wishlistService } from "@/services/wishlist.service";
-import type { Product, ProductVariant } from "@/types/product";
+import type { Product, ProductImage, ProductVariant } from "@/types/product";
 
 type ProductDetailPageProps = {
   slug: string;
@@ -37,21 +37,44 @@ const tabs: Array<{ value: ProductTab; label: string }> = [
 const isProductInStock = (product: Product | null, variant?: ProductVariant, storeId?: string | null) => {
   if (!product) return false;
   if (storeId && product.stock === 0) return false;
-  if (variant) return variant.inStock !== false && variant.stock !== 0;
-  return product.inStock !== false && product.stock !== 0;
+  if (variant) return variant.status !== "OUT_OF_STOCK" && variant.inStock !== false && variant.stock !== 0;
+  return product.status !== "OUT_OF_STOCK" && product.inStock !== false && product.stock !== 0;
 };
 
 const getProductId = (product: Product) => product.id || product._id || product.slug || product.name;
+
+const getVariantId = (variant?: ProductVariant) =>
+  variant?.id || variant?._id || variant?.barcode || variant?.sku || variant?.name;
+
+const isVariantSelected = (current?: ProductVariant, next?: ProductVariant) =>
+  Boolean(getVariantId(current) && getVariantId(current) === getVariantId(next));
 
 const getCategoryLabel = (category: Product["category"]) => {
   if (typeof category === "string") return category;
   return category?.name || "San pham";
 };
 
+const getImageUrl = (image?: string | ProductImage) => {
+  if (!image) return "";
+  return typeof image === "string" ? image : image.imageUrl;
+};
+
+const getProductThumbnail = (product: Product) => {
+  const thumbnail = product.images?.find((image) => typeof image !== "string" && image.isThumbnail);
+  return (
+    product.imageUrl ||
+    product.image ||
+    product.thumbnail ||
+    getImageUrl(thumbnail) ||
+    getImageUrl(product.images?.[0])
+  );
+};
+
 export function ProductDetailPage({ slug }: ProductDetailPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const storeId = searchParams.get("storeId");
+  const requestedVariantId = searchParams.get("variant");
   const [product, setProduct] = useState<Product | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [reviews, setReviews] = useState<ReviewDto[]>([]);
@@ -62,6 +85,11 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
   const [quantity, setQuantity] = useState(1);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [cartLoading, setCartLoading] = useState(false);
+  const [variantInventory, setVariantInventory] = useState<{
+    variantId: string;
+    stock: number;
+    inStock: boolean;
+  } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -77,9 +105,11 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
 
         if (!mounted) return;
         setProduct(productResponse.data);
-        setSelectedVariant(
-          productResponse.data.productVariants?.[0] ?? productResponse.data.variants?.[0],
-        );
+        const variants = productResponse.data.productVariants?.length
+          ? productResponse.data.productVariants
+          : productResponse.data.variants;
+        const requestedVariant = variants?.find((variant) => getVariantId(variant) === requestedVariantId);
+        setSelectedVariant(requestedVariant ?? variants?.[0]);
         setRelatedProducts(relatedResponse.data ?? []);
         setReviews(reviewsResponse.data ?? []);
       } catch {
@@ -97,19 +127,83 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
     return () => {
       mounted = false;
     };
-  }, [slug]);
+  }, [requestedVariantId, slug]);
 
   const galleryImages = useMemo(() => {
     if (!product) return [];
-    const images = product.images?.filter(Boolean);
-    if (images?.length) return images;
-    return [product.image || product.thumbnail || fallbackProductImage];
-  }, [product]);
+    const variantImage = selectedVariant?.imageUrl || selectedVariant?.image || selectedVariant?.images?.[0];
+    const productImages = product.images?.map(getImageUrl).filter(Boolean) ?? [];
+    const images = [variantImage, ...productImages, getProductThumbnail(product)].filter(
+      (image): image is string => Boolean(image),
+    );
+    return Array.from(new Set(images.length ? images : [fallbackProductImage]));
+  }, [product, selectedVariant]);
 
   const currentPrice = selectedVariant?.salePrice ?? selectedVariant?.price ?? product?.price ?? 0;
-  const currentCompareAtPrice = selectedVariant?.compareAtPrice ?? product?.compareAtPrice;
-  const inStock = isProductInStock(product, selectedVariant, storeId);
+  const currentCompareAtPrice =
+    selectedVariant?.compareAtPrice ??
+    (selectedVariant?.salePrice && selectedVariant.price ? selectedVariant.price : product?.compareAtPrice);
+  const currentVariantId = getVariantId(selectedVariant);
+  const matchedInventory =
+    currentVariantId && variantInventory?.variantId === currentVariantId ? variantInventory : null;
+  const inStock =
+    storeId && selectedVariant && matchedInventory
+      ? matchedInventory.inStock && matchedInventory.stock > 0
+      : isProductInStock(product, selectedVariant, storeId);
   const productVariants = product?.productVariants?.length ? product.productVariants : product?.variants;
+  const currentUnit = selectedVariant?.unit || product?.unit || "san pham";
+
+  const selectVariant = (variant: ProductVariant) => {
+    setSelectedVariant(variant);
+    setActiveImage(0);
+    setQuantity(1);
+  };
+
+  const getVariantImage = (variant?: ProductVariant) =>
+    variant?.imageUrl ||
+    variant?.image ||
+    variant?.images?.[0] ||
+    (product ? getProductThumbnail(product) : "") ||
+    fallbackProductImage;
+
+  const getVariantName = (variant?: ProductVariant) =>
+    variant?.name || variant?.value || variant?.barcode || variant?.sku || "Mac dinh";
+
+  const getVariantPrice = (variant?: ProductVariant) => variant?.salePrice ?? variant?.price ?? product?.price ?? 0;
+
+  const getVariantCompareAtPrice = (variant?: ProductVariant) =>
+    variant?.compareAtPrice ?? (variant?.salePrice && variant.price ? variant.price : product?.compareAtPrice);
+
+  const isVariantInStock = (variant?: ProductVariant) =>
+    variant?.status !== "OUT_OF_STOCK" && variant?.inStock !== false && variant?.stock !== 0;
+
+  useEffect(() => {
+    let mounted = true;
+    const variantId = getVariantId(selectedVariant);
+
+    if (!storeId || !variantId) return;
+
+    const fetchInventory = async () => {
+      try {
+        const response = await productService.getVariantInventory(variantId);
+        if (!mounted) return;
+        setVariantInventory({
+          variantId: String(variantId),
+          stock: response.data.stock,
+          inStock: response.data.inStock,
+        });
+      } catch {
+        if (!mounted) return;
+        setVariantInventory(null);
+      }
+    };
+
+    void fetchInventory();
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedVariant, storeId]);
 
   const addToCart = async (buyNow = false) => {
     if (!product || !inStock) return;
@@ -119,7 +213,7 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
       await cartService.addItem({
         productId: getProductId(product),
         quantity,
-        variantId: selectedVariant?.id || selectedVariant?._id,
+        variantId: getVariantId(selectedVariant),
         storeId: storeId || undefined,
       });
       toast.success("Da them vao gio hang");
@@ -176,7 +270,7 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
         ]}
       />
 
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,0.7fr)]">
+      <section className="grid gap-6 xl:grid-cols-[minmax(320px,0.85fr)_minmax(380px,0.95fr)_320px] lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,0.7fr)]">
         <div className="grid gap-3">
           <div className="relative aspect-square overflow-hidden rounded-md border bg-card">
             <Image
@@ -211,12 +305,17 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
             <div>
               <p className="text-sm font-semibold text-primary">{getCategoryLabel(product.category)}</p>
               <h1 className="mt-2 text-3xl font-bold leading-tight tracking-normal">{product.name}</h1>
+              {selectedVariant ? (
+                <p className="mt-2 text-sm font-medium text-muted-foreground">
+                  Dang chon: <span className="text-foreground">{getVariantName(selectedVariant)}</span>
+                </p>
+              ) : null}
               <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
                   <Star className="h-4 w-4 fill-secondary text-secondary" />
                   {reviews.length ? "Co danh gia" : "Chua co danh gia"}
                 </span>
-                <span>{product.unit}</span>
+                <span>{currentUnit}</span>
                 <span className={inStock ? "text-success" : "text-destructive"}>
                   {inStock ? "Con hang" : "Het hang"}
                 </span>
@@ -226,27 +325,27 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
             <PriceDisplay
               price={currentPrice}
               compareAtPrice={currentCompareAtPrice}
-              unit={product.unit}
+              unit={currentUnit}
               className="text-2xl"
             />
 
             {productVariants?.length ? (
-              <div className="grid gap-2">
+              <div className="grid gap-2 xl:hidden">
                 <p className="text-sm font-semibold">Chon phan loai</p>
                 <div className="flex flex-wrap gap-2">
                   {productVariants.map((variant) => (
                     <button
-                      key={variant.id}
+                      key={getVariantId(variant)}
                       type="button"
                       className={[
                         "rounded-md border px-3 py-2 text-sm transition-colors",
-                        selectedVariant?.id === variant.id
+                        isVariantSelected(selectedVariant, variant)
                           ? "border-primary bg-accent text-accent-foreground"
                           : "bg-background hover:bg-accent",
                       ].join(" ")}
-                      onClick={() => setSelectedVariant(variant)}
+                      onClick={() => selectVariant(variant)}
                     >
-                      {variant.name || variant.value}
+                      {getVariantName(variant)}
                     </button>
                   ))}
                 </div>
@@ -255,7 +354,7 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
 
             <div className="grid gap-2">
               <p className="text-sm font-semibold">So luong</p>
-              <QuantityInput value={quantity} max={product.stock || 99} onChange={setQuantity} />
+              <QuantityInput value={quantity} max={selectedVariant?.stock || product.stock || 99} onChange={setQuantity} />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -295,7 +394,7 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
               </div>
               <div className="flex gap-3">
                 <Truck className="h-5 w-5 text-primary" />
-                <p>Don vi: {product.unit}</p>
+                <p>Don vi: {currentUnit}</p>
               </div>
               <div className="flex gap-3">
                 <ShieldCheck className="h-5 w-5 text-primary" />
@@ -304,6 +403,64 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
             </div>
           </CardContent>
         </Card>
+
+        {productVariants?.length ? (
+          <aside className="lg:col-span-2 xl:col-span-1">
+            <Card className="h-fit shadow-none xl:sticky xl:top-24">
+              <CardContent className="grid gap-3 p-4">
+                <div>
+                  <h2 className="text-base font-bold">Bien the cung san pham</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Chon dung quy cach ban muon mua.</p>
+                </div>
+                <div className="grid max-h-[520px] gap-2 overflow-y-auto pr-1">
+                  {productVariants.map((variant) => {
+                    const selected = isVariantSelected(selectedVariant, variant);
+                    const variantStock = isVariantInStock(variant);
+
+                    return (
+                      <button
+                        key={getVariantId(variant)}
+                        type="button"
+                        aria-pressed={selected}
+                        className={[
+                          "grid grid-cols-[72px_1fr] gap-3 rounded-md border bg-card p-2 text-left transition",
+                          selected
+                            ? "border-primary bg-accent shadow-sm"
+                            : "hover:border-primary/60 hover:bg-muted/70",
+                        ].join(" ")}
+                        onClick={() => selectVariant(variant)}
+                      >
+                        <span className="relative aspect-square overflow-hidden rounded-md bg-muted">
+                          <Image
+                            src={getVariantImage(variant)}
+                            alt={getVariantName(variant)}
+                            fill
+                            sizes="72px"
+                            className="object-cover"
+                          />
+                        </span>
+                        <span className="min-w-0 space-y-1">
+                          <span className="line-clamp-2 text-sm font-semibold text-foreground">
+                            {getVariantName(variant)}
+                          </span>
+                          <PriceDisplay
+                            price={getVariantPrice(variant)}
+                            compareAtPrice={getVariantCompareAtPrice(variant)}
+                            unit={variant.unit || product.unit}
+                            className="gap-x-1 text-sm"
+                          />
+                          <span className={variantStock ? "block text-xs text-success" : "block text-xs text-destructive"}>
+                            {variantStock ? "Con hang" : "Het hang"}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </aside>
+        ) : null}
       </section>
 
       <section className="rounded-md border bg-card">

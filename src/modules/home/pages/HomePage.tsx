@@ -3,11 +3,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { Navigation, Pagination, Autoplay } from "swiper/modules";
-import { Swiper, SwiperSlide } from "swiper/react";
-import "swiper/css";
-import "swiper/css/navigation";
-import "swiper/css/pagination";
 import { MapPin, Store, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,6 +14,7 @@ import { categoryService, type CategoryDto } from "@/services/category.service";
 import { productService } from "@/services/product.service";
 import { promotionService, type PromotionDto } from "@/services/promotion.service";
 import { storeService, type StoreDto } from "@/services/store.service";
+import { env } from "@/configs/env";
 import type { Product } from "@/types/product";
 
 type HomeState = {
@@ -47,6 +43,27 @@ const safeData = async <T,>(request: Promise<{ data: T }>, fallback: T) => {
     return fallback;
   }
 };
+
+const resolveAssetUrl = (value?: string) => {
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith("/")) return new URL(value, env.apiUrl.replace(/\/api\/?.*$/, "")).toString();
+  return value;
+};
+
+const getBannerImage = (banner?: BannerDto) =>
+  resolveAssetUrl(
+    banner?.imageUrl || banner?.desktopImage || banner?.mobileImage || banner?.image || banner?.thumbnail,
+  );
+
+const getBannerHref = (banner: BannerDto, fallback: string) => banner.href || banner.link || banner.linkUrl || fallback;
+
+const isActiveBanner = (banner: BannerDto) => !banner.status || banner.status === "ACTIVE";
+
+const getBannersByPosition = (banners: BannerDto[], position: string) =>
+  banners
+    .filter((banner) => isActiveBanner(banner) && banner.position === position && getBannerImage(banner))
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
 function HomeSection({
   title,
@@ -109,11 +126,31 @@ function ProductSection({
 }
 
 function HeroBannerCarousel({ banners, loading }: { banners: BannerDto[]; loading: boolean }) {
+  const visibleBanners = banners
+    .map((banner) => ({
+      banner,
+      image: getBannerImage(banner),
+    }))
+    .filter((item) => item.image);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeBannerIndex = visibleBanners.length ? activeIndex % visibleBanners.length : 0;
+  const activeBanner = visibleBanners[activeBannerIndex] ?? visibleBanners[0];
+
+  useEffect(() => {
+    if (visibleBanners.length <= 1) return;
+
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % visibleBanners.length);
+    }, 4500);
+
+    return () => window.clearInterval(timer);
+  }, [visibleBanners.length]);
+
   if (loading) {
     return <LoadingSkeleton className="h-[260px] w-full md:h-[360px]" />;
   }
 
-  if (banners.length === 0) {
+  if (visibleBanners.length === 0) {
     return (
       <EmptyState
         title="Chua co banner"
@@ -123,38 +160,37 @@ function HeroBannerCarousel({ banners, loading }: { banners: BannerDto[]; loadin
   }
 
   return (
-    <Swiper
-      modules={[Navigation, Pagination, Autoplay]}
-      navigation
-      pagination={{ clickable: true }}
-      autoplay={{ delay: 4500, disableOnInteraction: false }}
-      loop={banners.length > 1}
-      className="overflow-hidden rounded-md border bg-card"
-    >
-      {banners.map((banner) => (
-        <SwiperSlide key={banner.id}>
-          <Link href={banner.href || "/products"} className="relative block h-[260px] md:h-[360px]">
-            <Image
-              src={banner.image}
-              alt={banner.title}
-              fill
-              priority
-              sizes="(min-width: 1024px) 80vw, 100vw"
-              className="object-cover"
+    <section className="relative h-[260px] overflow-hidden rounded-md border bg-card md:h-[360px]">
+      <Link href={getBannerHref(activeBanner.banner, "/products")} className="absolute inset-0 block">
+        <Image
+          key={activeBanner.image}
+          src={activeBanner.image}
+          alt={activeBanner.banner.title}
+          fill
+          priority
+          unoptimized
+          sizes="(min-width: 1024px) 80vw, 100vw"
+          className="object-cover"
+        />
+      </Link>
+
+      {visibleBanners.length > 1 ? (
+        <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-2">
+          {visibleBanners.map((item, index) => (
+            <button
+              key={item.banner.id || item.banner._id || item.banner.title}
+              type="button"
+              aria-label={`Chuyen den banner ${index + 1}`}
+              className={[
+                "h-2.5 rounded-full transition-all",
+                activeBannerIndex === index ? "w-8 bg-white" : "w-2.5 bg-white/60 hover:bg-white",
+              ].join(" ")}
+              onClick={() => setActiveIndex(index)}
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent" />
-            <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center p-5 text-white md:p-8">
-              <p className="mb-3 inline-flex w-fit rounded-md bg-white/20 px-3 py-1 text-sm font-semibold">
-                Uu dai online
-              </p>
-              <h1 className="text-3xl font-bold leading-tight tracking-normal md:text-5xl">
-                {banner.title}
-              </h1>
-            </div>
-          </Link>
-        </SwiperSlide>
-      ))}
-    </Swiper>
+          ))}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -251,26 +287,23 @@ function PromotionSection({
 }
 
 function MiddleBanner({ banner }: { banner?: BannerDto }) {
-  if (!banner) return null;
+  const image = getBannerImage(banner);
+
+  if (!banner || !image) return null;
 
   return (
     <Link
-      href={banner.href || "/promotions"}
+      href={getBannerHref(banner, "/promotions")}
       className="relative block overflow-hidden rounded-md border bg-card"
     >
       <div className="relative h-40 md:h-56">
         <Image
-          src={banner.image}
+          src={image}
           alt={banner.title}
           fill
           sizes="(min-width: 1024px) 80vw, 100vw"
           className="object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/10 to-transparent" />
-        <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center p-5 text-white md:p-8">
-          <p className="text-sm font-semibold">Banner giua trang</p>
-          <h2 className="mt-2 text-2xl font-bold tracking-normal md:text-4xl">{banner.title}</h2>
-        </div>
       </div>
     </Link>
   );
@@ -364,9 +397,19 @@ export function HomePage() {
     return Array.from(uniqueProducts.values()).slice(0, 10);
   }, [homeData.bestSellingProducts, homeData.newestProducts]);
 
+  const heroBanners = useMemo(() => {
+    const homeTopBanners = getBannersByPosition(homeData.banners, "HOME_TOP");
+    return homeTopBanners.length ? homeTopBanners : homeData.banners.filter((banner) => isActiveBanner(banner));
+  }, [homeData.banners]);
+
+  const middleBanner = useMemo(
+    () => getBannersByPosition(homeData.banners, "HOME_MIDDLE")[0],
+    [homeData.banners],
+  );
+
   return (
     <div className="grid gap-6">
-      <HeroBannerCarousel banners={homeData.banners} loading={loading} />
+      <HeroBannerCarousel banners={heroBanners} loading={loading} />
       <StoreSelection stores={homeData.stores} loading={loading} />
       <CategoryGrid categories={homeData.categories} loading={loading} />
       <ProductSection
@@ -375,7 +418,7 @@ export function HomePage() {
         products={homeData.bestSellingProducts}
         loading={loading}
       />
-      <MiddleBanner banner={homeData.banners[1]} />
+      <MiddleBanner banner={middleBanner} />
       <ProductSection
         title="San pham moi"
         description="Hang moi len ke trong ngay"

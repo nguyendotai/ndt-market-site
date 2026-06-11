@@ -1,7 +1,7 @@
 "use client";
 
 import { Menu } from "lucide-react";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Logo } from "@/components/common/Logo";
 import { SearchBar } from "@/components/header/SearchBar";
 import { CartButton } from "@/components/header/CartButton";
@@ -30,7 +30,9 @@ export function MobileHeader() {
         <CartButton compact />
       </div>
       <div className="px-4 pb-3">
-        <SearchBar compact />
+        <Suspense fallback={<div className="h-9 rounded-md border bg-card" />}>
+          <SearchBar compact />
+        </Suspense>
       </div>
       <div
         className={cn(

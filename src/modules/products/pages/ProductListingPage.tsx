@@ -25,13 +25,18 @@ const PAGE_LIMIT = 20;
 
 type ProductListingPageProps = {
   categorySlug?: string;
+  searchQueryParam?: "keyword" | "q";
+  title?: string;
+  description?: string;
+  showSearchSections?: boolean;
 };
 
 const readFiltersFromParams = (
   searchParams: URLSearchParams,
   categorySlug?: string,
+  searchQueryParam: "keyword" | "q" = "keyword",
 ): ProductFilterValues => ({
-  keyword: searchParams.get("keyword") ?? "",
+  keyword: searchParams.get(searchQueryParam) ?? searchParams.get("keyword") ?? "",
   category: categorySlug ?? searchParams.get("category") ?? "",
   brand: searchParams.get("brand") ?? "",
   minPrice: searchParams.get("minPrice") ?? "",
@@ -63,7 +68,13 @@ const toProductQuery = (
   limit: PAGE_LIMIT,
 });
 
-export function ProductListingPage({ categorySlug }: ProductListingPageProps) {
+export function ProductListingPage({
+  categorySlug,
+  searchQueryParam = "keyword",
+  title,
+  description,
+  showSearchSections = false,
+}: ProductListingPageProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -74,7 +85,7 @@ export function ProductListingPage({ categorySlug }: ProductListingPageProps) {
   const [loading, setLoading] = useState(true);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<ProductFilterValues>(() =>
-    readFiltersFromParams(searchParams, categorySlug),
+    readFiltersFromParams(searchParams, categorySlug, searchQueryParam),
   );
 
   const sort = searchParams.get("sort") ?? "newest";
@@ -148,10 +159,26 @@ export function ProductListingPage({ categorySlug }: ProductListingPageProps) {
     return result;
   }, [categories]);
 
+  const relatedCategories = useMemo(() => {
+    const keyword = filters.keyword.trim().toLowerCase();
+    if (!showSearchSections || !keyword) return [];
+
+    return flatCategories
+      .filter((item) => {
+        const haystack = [item.name, item.slug, item.description].filter(Boolean).join(" ").toLowerCase();
+        return haystack.includes(keyword) || keyword.includes(item.name.toLowerCase());
+      })
+      .slice(0, 8);
+  }, [filters.keyword, flatCategories, showSearchSections]);
+
   const updateUrl = (nextFilters: ProductFilterValues, nextSort = sort, nextPage = 1) => {
     const params = new URLSearchParams();
     Object.entries(nextFilters).forEach(([key, value]) => {
       if (key === "category" && categorySlug) return;
+      if (key === "keyword") {
+        if (value) params.set(searchQueryParam, String(value));
+        return;
+      }
       if (typeof value === "boolean") {
         if (value) params.set(key, "true");
         return;
@@ -216,8 +243,10 @@ export function ProductListingPage({ categorySlug }: ProductListingPageProps) {
         </section>
       ) : (
         <div>
-          <h1 className="text-3xl font-bold tracking-normal">Tat ca san pham</h1>
-          <p className="mt-2 text-muted-foreground">Tim kiem va loc san pham theo nhu cau mua sam.</p>
+          <h1 className="text-3xl font-bold tracking-normal">{title || "Tat ca san pham"}</h1>
+          <p className="mt-2 text-muted-foreground">
+            {description || "Tim kiem va loc san pham theo nhu cau mua sam."}
+          </p>
         </div>
       )}
 
@@ -233,6 +262,41 @@ export function ProductListingPage({ categorySlug }: ProductListingPageProps) {
         </div>
 
         <div className="grid min-w-0 gap-4">
+          {showSearchSections && relatedCategories.length > 0 ? (
+            <section className="rounded-md border bg-card p-4">
+              <div className="mb-3">
+                <h2 className="text-lg font-bold tracking-normal">Danh muc lien quan</h2>
+                <p className="text-sm text-muted-foreground">Cac nganh hang phu hop voi tu khoa ban dang tim.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                {relatedCategories.map((item) => (
+                  <button
+                    key={item.id || item._id || item.slug}
+                    type="button"
+                    className="grid grid-cols-[52px_1fr] items-center gap-3 rounded-md border bg-background p-2 text-left transition hover:border-primary hover:bg-muted"
+                    onClick={() => router.push(`/categories/${encodeURIComponent(item.slug)}`)}
+                  >
+                    <span className="relative aspect-square overflow-hidden rounded-full bg-muted">
+                      {item.image ? (
+                        <Image src={item.image} alt={item.name} fill sizes="52px" className="object-cover" />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-sm font-semibold text-primary">
+                          {item.name.slice(0, 1)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="line-clamp-2 text-sm font-semibold">{item.name}</span>
+                      {item.productCount ? (
+                        <span className="text-xs text-muted-foreground">{item.productCount} san pham</span>
+                      ) : null}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <div className="flex flex-col gap-3 rounded-md border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <Button
@@ -250,6 +314,13 @@ export function ProductListingPage({ categorySlug }: ProductListingPageProps) {
             </div>
             <ProductSort value={sort} onChange={(value) => updateUrl(filters, value, 1)} />
           </div>
+
+          {showSearchSections ? (
+            <div>
+              <h2 className="text-xl font-bold tracking-normal">San pham lien quan</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Ket qua phu hop voi tu khoa va bo loc hien tai.</p>
+            </div>
+          ) : null}
 
           {loading ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">

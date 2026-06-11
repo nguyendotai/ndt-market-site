@@ -1,16 +1,20 @@
-import { PlaceholderPage } from "@/components/common/PlaceholderPage";
+import { ProductListingPage } from "@/modules/products/pages/ProductListingPage";
 
-export default function Page({
+export default async function Page({
   searchParams,
 }: {
   searchParams?: Promise<{ q?: string }>;
 }) {
-  void searchParams;
+  const params = await searchParams;
+  const query = params?.q?.trim();
 
   return (
-    <PlaceholderPage
-      title="Tim kiem"
-      description="Route search da san sang de gan API tim san pham theo tu khoa va bo loc."
+    <ProductListingPage
+      key={query || "empty-search"}
+      searchQueryParam="q"
+      showSearchSections
+      title={query ? `Ket qua tim kiem cho "${query}"` : "Tim kiem san pham"}
+      description="Nhap tu khoa, loc danh muc, sap xep va tim san pham phu hop voi nhu cau mua sam."
     />
   );
 }

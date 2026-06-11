@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Plus, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PriceDisplay } from "@/components/product/PriceDisplay";
 import { addToCart } from "@/store/slices/cartSlice";
 import { useAppDispatch } from "@/store/hooks";
-import type { Product, ProductVariant } from "@/types/product";
+import type { Product, ProductImage, ProductVariant } from "@/types/product";
 
 const fallbackProductImage =
   "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=900&q=80";
@@ -16,11 +17,27 @@ const fallbackProductImage =
 const getProductId = (product: Product) => product.id || product._id || product.slug || product.name;
 
 const getVariantId = (variant?: ProductVariant) =>
-  variant?.id || variant?._id || variant?.sku || variant?.value || variant?.name;
+  variant?.id || variant?._id || variant?.barcode || variant?.sku || variant?.value || variant?.name;
 
 const getCategoryLabel = (category: Product["category"]) => {
   if (typeof category === "string") return category;
   return category?.name || "San pham";
+};
+
+const getImageUrl = (image?: string | ProductImage) => {
+  if (!image) return "";
+  return typeof image === "string" ? image : image.imageUrl;
+};
+
+const getProductThumbnail = (product: Product) => {
+  const thumbnail = product.images?.find((image) => typeof image !== "string" && image.isThumbnail);
+  return (
+    product.imageUrl ||
+    product.image ||
+    product.thumbnail ||
+    getImageUrl(thumbnail) ||
+    getImageUrl(product.images?.[0])
+  );
 };
 
 const getVariantLabel = (variant?: ProductVariant) => {
@@ -38,16 +55,23 @@ export function ProductCard({
   const dispatch = useAppDispatch();
   const productId = getProductId(product);
   const variantId = getVariantId(variant);
-  const variantImage = variant?.image || variant?.images?.[0];
+  const productDetailHref = `/products/${encodeURIComponent(product.slug || productId)}${
+    variantId ? `?variant=${encodeURIComponent(variantId)}` : ""
+  }`;
+  const variantImage = variant?.imageUrl || variant?.image || variant?.images?.[0];
   const productImage =
-    variantImage || product.image || product.thumbnail || product.images?.[0] || fallbackProductImage;
+    variantImage || getProductThumbnail(product) || fallbackProductImage;
   const categoryLabel = getCategoryLabel(product.category);
   const variantLabel = getVariantLabel(variant);
   const displayName = variantLabel ? `${product.name} - ${variantLabel}` : product.name;
-  const displayPrice = variant?.salePrice ?? variant?.price ?? product.price;
-  const displayCompareAtPrice = variant?.compareAtPrice ?? product.compareAtPrice;
+  const displayPrice = variant?.salePrice ?? variant?.price ?? product.price ?? 0;
+  const displayCompareAtPrice =
+    variant?.compareAtPrice ??
+    (variant?.salePrice && variant.price ? variant.price : product.compareAtPrice);
   const displayUnit = variant?.unit || product.unit || "san pham";
-  const inStock = variant ? variant.inStock !== false && variant.stock !== 0 : product.inStock !== false && product.stock !== 0;
+  const inStock = variant
+    ? variant.status !== "OUT_OF_STOCK" && variant.inStock !== false && variant.stock !== 0
+    : product.status !== "OUT_OF_STOCK" && product.inStock !== false && product.stock !== 0;
 
   return (
     <Card className="group overflow-hidden rounded-md border bg-card shadow-none transition hover:border-primary/60 hover:shadow-sm">
@@ -62,19 +86,27 @@ export function ProductCard({
             {product.badge}
           </span>
         ) : null}
-        <Image
-          src={productImage}
-          alt={displayName}
-          fill
-          sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
-          className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-        />
+        <Link
+          href={productDetailHref}
+          aria-label={`Xem chi tiet ${displayName}`}
+          className="absolute inset-0"
+        >
+          <Image
+            src={productImage}
+            alt={displayName}
+            fill
+            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+            className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+          />
+        </Link>
       </div>
       <CardContent className="space-y-3 p-3">
         <div>
           <p className="text-xs font-medium text-primary">{categoryLabel}</p>
           <h3 className="mt-1 line-clamp-2 min-h-10 text-sm font-medium leading-5">
-            {displayName}
+            <Link href={productDetailHref} className="transition-colors hover:text-primary">
+              {displayName}
+            </Link>
           </h3>
         </div>
         <div className="space-y-1">

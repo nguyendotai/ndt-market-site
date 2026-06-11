@@ -3,10 +3,19 @@ import type { Id, ListQueryParams } from "@/services/types";
 
 export type BannerDto = {
   id: Id;
+  _id?: Id;
   title: string;
-  image: string;
+  image?: string;
+  imageUrl?: string;
+  desktopImage?: string;
+  mobileImage?: string;
+  thumbnail?: string;
   href?: string;
+  link?: string;
+  linkUrl?: string;
   position?: string;
+  status?: "ACTIVE" | "INACTIVE" | string;
+  sortOrder?: number;
 };
 
 export const bannerService = {

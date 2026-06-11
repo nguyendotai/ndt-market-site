@@ -34,6 +34,8 @@ export const productService = {
     http.get<Product[]>(`/products/category/${categoryIdOrSlug}`),
   getProductsByBrand: (brandIdOrSlug: Id) => http.get<Product[]>(`/products/brand/${brandIdOrSlug}`),
   getRelatedProducts: (slug: Id) => http.get<Product[]>(`/products/${slug}/related`),
+  getVariantInventory: (variantId: Id) =>
+    http.get<{ variantId: Id; stock: number; inStock: boolean }>(`/products/${variantId}/inventory`),
   getProductById: (id: Id) => http.get<Product>(`/products/${id}`),
   getProductBySlug: (slug: string) => http.get<Product>(`/products/${slug}`),
 };
