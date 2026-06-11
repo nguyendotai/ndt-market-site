@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: #71ad0e;
+    --primary-foreground: #ffffff;
+    --background: #fcfdf8;
+    --foreground: #1f2937;
+    --card: #ffffff;
+    --card-foreground: #1f2937;
+    --popover: #ffffff;
+    --popover-foreground: #1f2937;
+    --secondary: #dcd964;
+    --secondary-foreground: #1f2937;
+    --muted: #f4f7ec;
+    --muted-foreground: #5f6b55;
+    --accent: #edf5dc;
+    --accent-foreground: #215502;
+    --success: #71ad0e;
+    --success-foreground: #ffffff;
+    --destructive: #dc2626;
+    --destructive-foreground: #ffffff;
+    --border: #dce6c9;
+    --input: #dce6c9;
+    --ring: #71ad0e;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --primary: #215502;
+    --primary-foreground: #ffffff;
+    --background: #0b0f08;
+    --foreground: #f8faf4;
+    --card: #131a10;
+    --card-foreground: #f8faf4;
+    --popover: #131a10;
+    --popover-foreground: #f8faf4;
+    --secondary: #2a3b20;
+    --secondary-foreground: #f8faf4;
+    --muted: #1b2416;
+    --muted-foreground: #b9c6ad;
+    --accent: #23351a;
+    --accent-foreground: #f8faf4;
+    --success: #71ad0e;
+    --success-foreground: #ffffff;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+    --border: #2d3b25;
+    --input: #2d3b25;
+    --ring: #71ad0e;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
