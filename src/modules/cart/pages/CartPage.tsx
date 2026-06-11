@@ -46,7 +46,10 @@ export function CartPage() {
             </CardHeader>
             <CardContent className="divide-y p-0">
               {items.map((item) => (
-                <div key={item.productId} className="flex items-center justify-between gap-4 p-4">
+                <div
+                  key={`${item.productId}-${item.variantId || "default"}`}
+                  className="flex items-center justify-between gap-4 p-4"
+                >
                   <div>
                     <p className="font-medium">{item.name}</p>
                     <p className="text-sm text-muted-foreground">
@@ -57,7 +60,14 @@ export function CartPage() {
                     size="icon"
                     variant="ghost"
                     aria-label={`Xoa ${item.name}`}
-                    onClick={() => dispatch(removeFromCart(item.productId))}
+                    onClick={() =>
+                      dispatch(
+                        removeFromCart({
+                          productId: item.productId,
+                          variantId: item.variantId,
+                        }),
+                      )
+                    }
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

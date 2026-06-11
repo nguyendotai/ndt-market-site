@@ -1,6 +1,7 @@
 import axios from "axios";
 import { env } from "@/configs/env";
 import { authStorage } from "@/modules/auth/services/authStorage";
+import type { ApiErrorPayload } from "@/services/types";
 
 export const axiosClient = axios.create({
   baseURL: env.apiUrl,
@@ -22,9 +23,31 @@ axiosClient.interceptors.request.use((config) => {
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401) {
+    const status = error?.response?.status as number | undefined;
+    const backendMessage = error?.response?.data?.message as string | undefined;
+    const fallbackMessage =
+      status === 401
+        ? "Phien dang nhap da het han"
+        : status === 403
+          ? "Ban khong co quyen thuc hien thao tac nay"
+          : status === 500
+            ? "May chu dang gap su co"
+            : error?.message || "Co loi xay ra";
+
+    if (status === 401) {
       authStorage.clear();
     }
+
+    const normalizedError: ApiErrorPayload = {
+      success: false,
+      message: backendMessage ?? fallbackMessage,
+      data: null,
+      meta: error?.response?.data?.meta,
+      status,
+    };
+
+    error.normalized = normalizedError;
+    error.message = normalizedError.message;
 
     return Promise.reject(error);
   },

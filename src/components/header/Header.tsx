@@ -1,27 +1,17 @@
 import Link from "next/link";
-import { Store } from "lucide-react";
 import { mainMenu } from "@/configs/menu";
 import { Logo } from "@/components/common/Logo";
-import { CategoryMegaMenu } from "@/components/category/CategoryMegaMenu";
 import { Container } from "@/components/layout/Container";
 import { SearchBar } from "@/components/header/SearchBar";
 import { ThemeToggle } from "@/components/header/ThemeToggle";
 import { CartButton } from "@/components/header/CartButton";
 import { UserDropdown } from "@/components/header/UserDropdown";
-import { Button } from "@/components/ui/button";
 
 export function Header() {
   return (
     <header className="hidden border-b bg-background/95 backdrop-blur lg:block">
       <Container size="wide" className="flex h-16 items-center gap-3">
         <Logo />
-        <div className="group relative">
-          <Button variant="secondary" className="gap-2" aria-haspopup="menu">
-            <Store className="h-4 w-4" />
-            Danh muc
-          </Button>
-          <CategoryMegaMenu />
-        </div>
         <div className="min-w-0 flex-1">
           <SearchBar />
         </div>

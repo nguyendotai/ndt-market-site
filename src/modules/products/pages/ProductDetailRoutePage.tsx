@@ -1,11 +1,11 @@
 import { Suspense } from "react";
 import { LoadingSkeleton } from "@/components/common/LoadingSkeleton";
-import { ProductListingPage } from "@/modules/products/pages/ProductListingPage";
+import { ProductDetailPage } from "@/modules/products/pages/ProductDetailPage";
 
-export function ProductsPage({ categorySlug }: { categorySlug?: string }) {
+export function ProductDetailRoutePage({ slug }: { slug: string }) {
   return (
     <Suspense fallback={<LoadingSkeleton className="h-[70dvh] w-full" />}>
-      <ProductListingPage categorySlug={categorySlug} />
+      <ProductDetailPage slug={slug} />
     </Suspense>
   );
 }

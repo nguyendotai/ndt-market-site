@@ -46,7 +46,7 @@ export function CategorySidebar({ activeHref }: CategorySidebarProps) {
     <nav
       ref={navRef}
       aria-label="Danh muc san pham"
-      className="relative flex h-full w-full flex-col border-r bg-card"
+      className="relative z-30 flex h-full w-full flex-col border-r bg-card"
     >
       <div className="shrink-0 border-b px-5 py-4">
         <p className="text-sm font-semibold">Danh muc san pham</p>
@@ -67,7 +67,7 @@ export function CategorySidebar({ activeHref }: CategorySidebarProps) {
         <div
           role="menu"
           className={cn(
-            "absolute z-50 rounded-md border bg-popover p-2 text-popover-foreground shadow-lg",
+            "absolute z-[80] rounded-md border bg-popover p-2 text-popover-foreground shadow-lg",
             "left-[calc(100%+0.75rem)] top-[5.25rem] w-72",
           )}
         >

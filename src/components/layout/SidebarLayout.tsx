@@ -18,13 +18,13 @@ export function SidebarLayout({
       <div className="grid lg:grid-cols-[308px_minmax(0,1fr)]">
         <aside
           aria-label={sidebarLabel}
-          className="hidden lg:block"
+          className="relative z-30 hidden lg:block"
         >
           <div className="sticky top-16 h-[calc(100dvh-4rem)] overflow-visible">
             <CategorySidebar />
           </div>
         </aside>
-        <div className="min-w-0 px-4 sm:px-5 lg:px-6 lg:py-6">{children}</div>
+        <div className="relative z-0 min-w-0 px-4 sm:px-5 lg:px-6 lg:py-6">{children}</div>
       </div>
     </Container>
   );
