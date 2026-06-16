@@ -30,10 +30,10 @@ export type CategoryMenuItem = MenuItem & {
 };
 
 export const mainMenu: MenuItem[] = [
-  { href: "/", label: "Trang chu", icon: Home },
-  { href: "/products", label: "San pham", icon: PackageSearch },
-  { href: "/categories", label: "Danh muc", icon: Store },
-  { href: "/articles", label: "Cam nang", icon: BookOpen },
+  { href: "/", label: "Trang chủ", icon: Home },
+  { href: "/products", label: "Sản phẩm", icon: PackageSearch },
+  { href: "/categories", label: "Danh mục", icon: Store },
+  { href: "/articles", label: "Cẩm nang", icon: BookOpen },
 ];
 
 export const categoryMenu: CategoryMenuItem[] = [
@@ -126,11 +126,11 @@ export const categoryMenu: CategoryMenuItem[] = [
 export const categoryDisclosureIcon = ChevronRight;
 
 export const mobileMenu: MenuItem[] = [
-  { href: "/", label: "Trang chu", icon: Home },
-  { href: "/search", label: "Tim kiem", icon: Search },
-  { href: "/categories", label: "Danh muc", icon: Store },
-  { href: "/cart", label: "Gio hang", icon: ShoppingCart },
-  { href: "/account", label: "Tai khoan", icon: User },
+  { href: "/", label: "Trang chủ", icon: Home },
+  { href: "/search", label: "Tìm kiếm", icon: Search },
+  { href: "/categories", label: "Danh mục", icon: Store },
+  { href: "/cart", label: "Gior hàng", icon: ShoppingCart },
+  { href: "/account", label: "Tài khoản", icon: User },
 ];
 
 export const policyLinks = [

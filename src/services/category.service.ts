@@ -9,6 +9,9 @@ export type CategoryDto = {
   description?: string;
   banner?: string;
   image?: string;
+  imageUrl?: string;
+  icon?: string;
+  thumbnail?: string;
   parentId?: Id | null;
   children?: CategoryDto[];
   productCount?: number;

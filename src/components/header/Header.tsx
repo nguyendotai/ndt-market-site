@@ -4,7 +4,6 @@ import { mainMenu } from "@/configs/menu";
 import { Logo } from "@/components/common/Logo";
 import { Container } from "@/components/layout/Container";
 import { SearchBar } from "@/components/header/SearchBar";
-import { ThemeToggle } from "@/components/header/ThemeToggle";
 import { CartButton } from "@/components/header/CartButton";
 import { UserDropdown } from "@/components/header/UserDropdown";
 
@@ -29,7 +28,6 @@ export function Header() {
             </Link>
           ))}
         </nav>
-        <ThemeToggle />
         <CartButton />
         <UserDropdown />
       </Container>

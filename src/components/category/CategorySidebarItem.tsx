@@ -1,11 +1,20 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { categoryDisclosureIcon, type CategoryMenuItem } from "@/configs/menu";
+import { ChevronRight, PackageSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+export type CategorySidebarMenuItem = {
+  href: string;
+  label: string;
+  image?: string;
+  count?: number;
+  children?: CategorySidebarMenuItem[];
+};
+
 export type CategorySidebarItemProps = {
-  item: CategoryMenuItem;
+  item: CategorySidebarMenuItem;
   activeHref?: string;
   open?: boolean;
   onToggle?: () => void;
@@ -17,16 +26,26 @@ export function CategorySidebarItem({
   open = false,
   onToggle,
 }: CategorySidebarItemProps) {
-  const Icon = item.icon;
-  const DisclosureIcon = categoryDisclosureIcon;
   const active = activeHref === item.href;
   const children = item.children ?? [];
   const hasChildren = children.length > 0;
 
   const content = (
     <>
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-primary">
-        <Icon className="h-4 w-4" aria-hidden="true" />
+      <span className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-primary">
+        {item.image ? (
+          <Image
+            src={item.image}
+            alt=""
+            fill
+            unoptimized
+            sizes="36px"
+            className="object-cover"
+            aria-hidden="true"
+          />
+        ) : (
+          <PackageSearch className="h-4 w-4" aria-hidden="true" />
+        )}
       </span>
       <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
       {typeof item.count === "number" ? (
@@ -35,7 +54,7 @@ export function CategorySidebarItem({
         </span>
       ) : null}
       {hasChildren ? (
-        <DisclosureIcon
+        <ChevronRight
           className={cn(
             "h-4 w-4 text-muted-foreground transition-transform",
             open && "rotate-90",

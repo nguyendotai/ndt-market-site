@@ -60,7 +60,7 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
         <MobileHeader />
       </div>
       <main className="pt-[116px] lg:pt-16">
-        <SidebarLayout>{children}</SidebarLayout>
+        <SidebarLayout headerVisible={headerVisible}>{children}</SidebarLayout>
       </main>
       <Footer />
       <BottomNavigation />

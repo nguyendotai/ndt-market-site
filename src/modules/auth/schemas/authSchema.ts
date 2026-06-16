@@ -6,9 +6,17 @@ export const loginSchema = z.object({
   password: passwordSchema,
 });
 
-export const registerSchema = loginSchema.extend({
-  name: z.string().min(2, "Ten toi thieu 2 ky tu"),
-});
+export const registerSchema = loginSchema
+  .extend({
+    confirmPassword: passwordSchema,
+    fullName: z.string().optional(),
+    phone: z.string().optional(),
+    avatar: z.string().optional(),
+  })
+  .refine((values) => values.password === values.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Mat khau xac nhan khong khop",
+  });
 
 export const changePasswordSchema = z
   .object({

@@ -34,6 +34,11 @@ const assertCustomer = (auth: AuthResponse) => {
     throw new Error("Chi tai khoan CUSTOMER duoc dung Client Site");
   }
 
+  if (auth.user.status === "BLOCKED") {
+    authStorage.clear();
+    throw new Error("Tai khoan da bi khoa");
+  }
+
   return auth;
 };
 

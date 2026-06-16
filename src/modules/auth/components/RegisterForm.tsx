@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LockKeyhole, Mail, User } from "lucide-react";
+import { LockKeyhole, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -27,9 +27,9 @@ export function RegisterForm() {
   } = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      name: "",
       email: "",
       password: "",
+      confirmPassword: "",
     },
   });
 
@@ -50,14 +50,6 @@ export function RegisterForm() {
       </CardHeader>
       <CardContent>
         <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
-          <div className="space-y-2">
-            <Label htmlFor="name">Ho ten</Label>
-            <div className="relative">
-              <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input id="name" className="pl-9" {...register("name")} />
-            </div>
-            {errors.name ? <p className="text-sm text-destructive">{errors.name.message}</p> : null}
-          </div>
           <div className="space-y-2">
             <Label htmlFor="register-email">Email</Label>
             <div className="relative">
@@ -86,6 +78,21 @@ export function RegisterForm() {
             </div>
             {errors.password ? (
               <p className="text-sm text-destructive">{errors.password.message}</p>
+            ) : null}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="register-confirm-password">Xac nhan mat khau</Label>
+            <div className="relative">
+              <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="register-confirm-password"
+                type="password"
+                className="pl-9"
+                {...register("confirmPassword")}
+              />
+            </div>
+            {errors.confirmPassword ? (
+              <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
             ) : null}
           </div>
           <Button

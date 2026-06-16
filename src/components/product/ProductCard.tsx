@@ -7,8 +7,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PriceDisplay } from "@/components/product/PriceDisplay";
-import { addToCart } from "@/store/slices/cartSlice";
+import { addCartItem } from "@/store/slices/cartSlice";
 import { useAppDispatch } from "@/store/hooks";
+import { cn } from "@/lib/utils";
 import type { Product, ProductImage, ProductVariant } from "@/types/product";
 
 const fallbackProductImage =
@@ -21,7 +22,7 @@ const getVariantId = (variant?: ProductVariant) =>
 
 const getCategoryLabel = (category: Product["category"]) => {
   if (typeof category === "string") return category;
-  return category?.name || "San pham";
+  return category?.name || "Sản phẩm";
 };
 
 const getImageUrl = (image?: string | ProductImage) => {
@@ -48,9 +49,11 @@ const getVariantLabel = (variant?: ProductVariant) => {
 export function ProductCard({
   product,
   variant,
+  compact = false,
 }: {
   product: Product;
   variant?: ProductVariant;
+  compact?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const productId = getProductId(product);
@@ -68,21 +71,27 @@ export function ProductCard({
   const displayCompareAtPrice =
     variant?.compareAtPrice ??
     (variant?.salePrice && variant.price ? variant.price : product.compareAtPrice);
-  const displayUnit = variant?.unit || product.unit || "san pham";
+  const displayUnit = variant?.unit || product.unit || "sản phẩm";
   const inStock = variant
     ? variant.status !== "OUT_OF_STOCK" && variant.inStock !== false && variant.stock !== 0
     : product.status !== "OUT_OF_STOCK" && product.inStock !== false && product.stock !== 0;
 
   return (
-    <Card className="group overflow-hidden rounded-md border bg-card shadow-none transition hover:border-primary/60 hover:shadow-sm">
-      <div className="relative aspect-square bg-muted">
+    <Card className="group flex flex-col overflow-hidden rounded-md border bg-card shadow-none transition hover:border-primary/60 hover:shadow-sm">
+      <div className={cn("relative shrink-0 bg-muted", compact ? "aspect-[1.05/1]" : "aspect-[4/3]")}>
         {product.discountLabel ? (
-          <span className="absolute left-2 top-2 z-10 rounded-md bg-secondary px-2 py-1 text-xs font-bold text-secondary-foreground">
+          <span className={cn(
+            "absolute left-2 top-2 z-10 rounded-md bg-secondary font-bold text-secondary-foreground",
+            compact ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-1 text-xs",
+          )}>
             {product.discountLabel}
           </span>
         ) : null}
         {product.badge ? (
-          <span className="absolute right-2 top-2 z-10 rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground">
+          <span className={cn(
+            "absolute right-2 top-2 z-10 rounded-md bg-primary font-semibold text-primary-foreground",
+            compact ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-1 text-xs",
+          )}>
             {product.badge}
           </span>
         ) : null}
@@ -95,51 +104,60 @@ export function ProductCard({
             src={productImage}
             alt={displayName}
             fill
-            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
-            className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            sizes={compact ? "(min-width: 1536px) 14vw, (min-width: 1024px) 18vw, 50vw" : "(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"}
+            className="object-contain p-2 transition-transform duration-300 group-hover:scale-[1.03]"
           />
         </Link>
       </div>
-      <CardContent className="space-y-3 p-3">
-        <div>
-          <p className="text-xs font-medium text-primary">{categoryLabel}</p>
-          <h3 className="mt-1 line-clamp-2 min-h-10 text-sm font-medium leading-5">
+      <CardContent className={cn("flex flex-col", compact ? "gap-2 p-2.5" : "gap-3 p-3")}>
+        <div className={compact ? "min-h-[70px]" : "min-h-[76px]"}>
+          <p className="line-clamp-1 text-xs font-medium text-primary">{categoryLabel}</p>
+          <h3 className={cn(
+            "mt-1 line-clamp-2 font-medium",
+            compact ? "min-h-9 text-[13px] leading-[18px]" : "min-h-10 text-sm leading-5",
+          )}>
             <Link href={productDetailHref} className="transition-colors hover:text-primary">
               {displayName}
             </Link>
           </h3>
         </div>
-        <div className="space-y-1">
+        <div className={cn("min-h-[66px]", compact && "min-h-[58px]")}>
           <PriceDisplay
             price={displayPrice}
             unit={displayUnit}
             compareAtPrice={displayCompareAtPrice}
-            className="gap-x-2 gap-y-0"
+            className={cn("gap-x-2 gap-y-0", compact && "text-sm")}
           />
-          {product.promoNote ? (
-            <p className="min-h-5 text-xs font-medium text-success">{product.promoNote}</p>
-          ) : null}
+          <p className="line-clamp-1 min-h-5 text-xs font-medium text-success">
+            {product.promoNote || ""}
+          </p>
         </div>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex min-h-9 items-center justify-between gap-2">
           <p className={inStock ? "text-xs text-muted-foreground" : "text-xs text-destructive"}>
-            {inStock ? "Con hang" : "Het hang"}
+            {inStock ? "Còn hàng" : "Hết hàng"}
           </p>
           <Button
             size="sm"
-            className="h-9 gap-1 px-3"
+            className={cn("gap-1", compact ? "h-8 px-2.5" : "h-9 px-3")}
             disabled={!inStock}
             aria-label={`Them ${displayName} vao gio`}
             onClick={() => {
-              dispatch(
-                addToCart({
+              void dispatch(
+                addCartItem({
                   productId,
                   variantId,
                   name: displayName,
                   price: displayPrice,
                   unit: displayUnit,
+                  image: productImage,
+                  stock: variant?.stock ?? product.stock,
+                  inStock,
+                  quantity: 1,
                 }),
-              );
-              toast.success("Da them vao gio hang");
+              )
+                .unwrap()
+                .then(() => toast.success("Da them vao gio hang"))
+                .catch((error) => toast.error(String(error || "Khong the them vao gio hang")));
             }}
           >
             <ShoppingCart className="h-4 w-4" />

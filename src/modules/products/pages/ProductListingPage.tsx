@@ -18,6 +18,7 @@ import { Breadcrumb } from "@/modules/products/components/Breadcrumb";
 import { ProductSort } from "@/modules/products/components/ProductSort";
 import { categoryService, type CategoryDto } from "@/services/category.service";
 import { productService, type ProductQueryParams } from "@/services/product.service";
+import { env } from "@/configs/env";
 import type { Product } from "@/types/product";
 import type { ApiMeta } from "@/services/types";
 
@@ -67,6 +68,19 @@ const toProductQuery = (
   page,
   limit: PAGE_LIMIT,
 });
+
+const resolveAssetUrl = (value?: string) => {
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith("/")) return new URL(value, env.apiUrl.replace(/\/api\/?.*$/, "")).toString();
+  return value;
+};
+
+const getCategoryId = (category?: CategoryDto | null) =>
+  String(category?.id || category?._id || category?.slug || "");
+
+const getCategoryImage = (category: CategoryDto) =>
+  resolveAssetUrl(category.imageUrl || category.image || category.icon || category.thumbnail);
 
 export function ProductListingPage({
   categorySlug,
@@ -171,6 +185,14 @@ export function ProductListingPage({
       .slice(0, 8);
   }, [filters.keyword, flatCategories, showSearchSections]);
 
+  const categoryChildren = useMemo(() => {
+    if (!category) return [];
+    if (category.children?.length) return category.children;
+
+    const categoryId = getCategoryId(category);
+    return flatCategories.filter((item) => String(item.parentId || "") === categoryId);
+  }, [category, flatCategories]);
+
   const updateUrl = (nextFilters: ProductFilterValues, nextSort = sort, nextPage = 1) => {
     const params = new URLSearchParams();
     Object.entries(nextFilters).forEach(([key, value]) => {
@@ -211,44 +233,139 @@ export function ProductListingPage({
         { label: "San pham" },
       ];
 
+  if (category) {
+    return (
+      <div className="grid gap-4">
+        <Breadcrumb items={breadcrumbItems} />
+
+        <section className="rounded-md border bg-card">
+          <div className="border-b px-3 py-2">
+            <h1 className="text-base font-bold tracking-normal">{category.name}</h1>
+          </div>
+
+          {categoryChildren.length > 0 ? (
+            <div className="flex gap-4 overflow-x-auto px-3 py-3">
+              {categoryChildren.map((child) => (
+                <button
+                  key={child.id || child._id || child.slug}
+                  type="button"
+                  className="grid w-20 shrink-0 justify-items-center gap-2 text-center text-xs text-muted-foreground transition hover:text-primary"
+                  onClick={() => router.push(`/categories/${encodeURIComponent(child.slug)}`)}
+                >
+                  <span className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-muted text-sm font-semibold text-primary">
+                    {getCategoryImage(child) ? (
+                      <Image
+                        src={getCategoryImage(child)}
+                        alt={child.name}
+                        fill
+                        unoptimized
+                        sizes="48px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      child.name.slice(0, 1)
+                    )}
+                  </span>
+                  <span className="line-clamp-2 min-h-8">{child.name}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="flex items-center justify-between gap-3 border-t px-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              {meta?.total ? `${meta.total} san pham` : `${products.length} san pham`}
+            </p>
+            <ProductSort value={sort} onChange={(value) => updateUrl(filters, value, 1)} />
+          </div>
+        </section>
+
+        <section className="grid gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold tracking-normal">San pham theo danh muc</h2>
+              <p className="text-sm text-muted-foreground">{category.name}</p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2 lg:hidden"
+              onClick={() => setFilterOpen(true)}
+            >
+              <Filter className="h-4 w-4" />
+              Bo loc
+            </Button>
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+              {Array.from({ length: 12 }).map((_, index) => (
+                <LoadingSkeleton key={index} className="h-64 w-full" />
+              ))}
+            </div>
+          ) : products.length > 0 ? (
+            <ProductGrid products={products} compact />
+          ) : (
+            <EmptyState
+              title="Khong tim thay san pham"
+              description="Danh muc nay chua co san pham phu hop voi bo loc hien tai."
+              actionLabel="Xoa bo loc"
+              onAction={resetFilters}
+            />
+          )}
+
+          {!loading && products.length > 0 ? (
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={page <= 1}
+                onClick={() => updateUrl(filters, sort, page - 1)}
+              >
+                Truoc
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Trang {page} / {Math.max(totalPages || 1, 1)}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={page >= Math.max(totalPages || 1, 1)}
+                onClick={() => updateUrl(filters, sort, page + 1)}
+              >
+                Sau
+              </Button>
+            </div>
+          ) : null}
+        </section>
+
+        <MobileFilterDrawer open={filterOpen} onClose={() => setFilterOpen(false)}>
+          <ProductFilters
+            categories={flatCategories}
+            values={filters}
+            onChange={setFilters}
+            onApply={() => {
+              updateUrl(filters, sort, 1);
+              setFilterOpen(false);
+            }}
+            onReset={resetFilters}
+            className="border-0 shadow-none"
+          />
+        </MobileFilterDrawer>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-5">
       <Breadcrumb items={breadcrumbItems} />
 
-      {category ? (
-        <section className="relative overflow-hidden rounded-md border bg-card">
-          {category.banner || category.image ? (
-            <div className="relative h-44 md:h-56">
-              <Image
-                src={(category.banner || category.image) as string}
-                alt={category.name}
-                fill
-                sizes="(min-width: 1024px) 80vw, 100vw"
-                className="object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/15 to-transparent" />
-              <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center p-5 text-white md:p-8">
-                <h1 className="text-3xl font-bold tracking-normal md:text-5xl">{category.name}</h1>
-                {category.description ? <p className="mt-3">{category.description}</p> : null}
-              </div>
-            </div>
-          ) : (
-            <div className="p-5 md:p-8">
-              <h1 className="text-3xl font-bold tracking-normal">{category.name}</h1>
-              {category.description ? (
-                <p className="mt-2 max-w-2xl text-muted-foreground">{category.description}</p>
-              ) : null}
-            </div>
-          )}
-        </section>
-      ) : (
-        <div>
-          <h1 className="text-3xl font-bold tracking-normal">{title || "Tat ca san pham"}</h1>
-          <p className="mt-2 text-muted-foreground">
-            {description || "Tim kiem va loc san pham theo nhu cau mua sam."}
-          </p>
-        </div>
-      )}
+      <div>
+        <h1 className="text-3xl font-bold tracking-normal">{title || "Tat ca san pham"}</h1>
+        <p className="mt-2 text-muted-foreground">
+          {description || "Tim kiem va loc san pham theo nhu cau mua sam."}
+        </p>
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
         <div className="hidden lg:block">

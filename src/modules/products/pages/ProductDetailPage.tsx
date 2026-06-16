@@ -13,7 +13,8 @@ import { PriceDisplay } from "@/components/product/PriceDisplay";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { QuantityInput } from "@/components/product/QuantityInput";
 import { Breadcrumb } from "@/modules/products/components/Breadcrumb";
-import { cartService } from "@/services/cart.service";
+import { addCartItem } from "@/store/slices/cartSlice";
+import { useAppDispatch } from "@/store/hooks";
 import { productService } from "@/services/product.service";
 import { reviewService, type ReviewDto } from "@/services/review.service";
 import { wishlistService } from "@/services/wishlist.service";
@@ -71,6 +72,7 @@ const getProductThumbnail = (product: Product) => {
 };
 
 export function ProductDetailPage({ slug }: ProductDetailPageProps) {
+  const dispatch = useAppDispatch();
   const router = useRouter();
   const searchParams = useSearchParams();
   const storeId = searchParams.get("storeId");
@@ -210,12 +212,18 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
     setCartLoading(true);
 
     try {
-      await cartService.addItem({
+      await dispatch(addCartItem({
         productId: getProductId(product),
-        quantity,
         variantId: getVariantId(selectedVariant),
+        name: selectedVariant ? `${product.name} - ${getVariantName(selectedVariant)}` : product.name,
+        price: currentPrice,
+        unit: currentUnit,
+        image: galleryImages[activeImage] || getProductThumbnail(product) || fallbackProductImage,
+        stock: matchedInventory?.stock ?? selectedVariant?.stock ?? product.stock,
+        inStock,
+        quantity,
         storeId: storeId || undefined,
-      });
+      })).unwrap();
       toast.success("Da them vao gio hang");
       if (buyNow) router.push("/checkout");
     } catch (error) {

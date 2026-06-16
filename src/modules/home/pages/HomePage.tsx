@@ -12,7 +12,10 @@ import { ProductGrid } from "@/modules/products/components/ProductGrid";
 import { bannerService, type BannerDto } from "@/services/banner.service";
 import { categoryService, type CategoryDto } from "@/services/category.service";
 import { productService } from "@/services/product.service";
-import { promotionService, type PromotionDto } from "@/services/promotion.service";
+import {
+  promotionService,
+  type PromotionDto,
+} from "@/services/promotion.service";
 import { storeService, type StoreDto } from "@/services/store.service";
 import { env } from "@/configs/env";
 import type { Product } from "@/types/product";
@@ -47,22 +50,34 @@ const safeData = async <T,>(request: Promise<{ data: T }>, fallback: T) => {
 const resolveAssetUrl = (value?: string) => {
   if (!value) return "";
   if (/^https?:\/\//i.test(value)) return value;
-  if (value.startsWith("/")) return new URL(value, env.apiUrl.replace(/\/api\/?.*$/, "")).toString();
+  if (value.startsWith("/"))
+    return new URL(value, env.apiUrl.replace(/\/api\/?.*$/, "")).toString();
   return value;
 };
 
 const getBannerImage = (banner?: BannerDto) =>
   resolveAssetUrl(
-    banner?.imageUrl || banner?.desktopImage || banner?.mobileImage || banner?.image || banner?.thumbnail,
+    banner?.imageUrl ||
+      banner?.desktopImage ||
+      banner?.mobileImage ||
+      banner?.image ||
+      banner?.thumbnail,
   );
 
-const getBannerHref = (banner: BannerDto, fallback: string) => banner.href || banner.link || banner.linkUrl || fallback;
+const getBannerHref = (banner: BannerDto, fallback: string) =>
+  banner.href || banner.link || banner.linkUrl || fallback;
 
-const isActiveBanner = (banner: BannerDto) => !banner.status || banner.status === "ACTIVE";
+const isActiveBanner = (banner: BannerDto) =>
+  !banner.status || banner.status === "ACTIVE";
 
 const getBannersByPosition = (banners: BannerDto[], position: string) =>
   banners
-    .filter((banner) => isActiveBanner(banner) && banner.position === position && getBannerImage(banner))
+    .filter(
+      (banner) =>
+        isActiveBanner(banner) &&
+        banner.position === position &&
+        getBannerImage(banner),
+    )
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
 function HomeSection({
@@ -81,7 +96,9 @@ function HomeSection({
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
         <div>
           <h2 className="text-2xl font-bold tracking-normal">{title}</h2>
-          {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+          {description ? (
+            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          ) : null}
         </div>
         {actionHref ? (
           <Button asChild variant="outline">
@@ -108,13 +125,13 @@ function ProductSection({
   return (
     <HomeSection title={title} description={description} actionHref="/products">
       {loading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <LoadingSkeleton key={index} className="h-80 w-full" />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <LoadingSkeleton key={index} className="h-64 w-full" />
           ))}
         </div>
       ) : products.length > 0 ? (
-        <ProductGrid products={products} />
+        <ProductGrid products={products} compact />
       ) : (
         <EmptyState
           title="Chua co san pham"
@@ -125,7 +142,13 @@ function ProductSection({
   );
 }
 
-function HeroBannerCarousel({ banners, loading }: { banners: BannerDto[]; loading: boolean }) {
+function HeroBannerCarousel({
+  banners,
+  loading,
+}: {
+  banners: BannerDto[];
+  loading: boolean;
+}) {
   const visibleBanners = banners
     .map((banner) => ({
       banner,
@@ -133,7 +156,9 @@ function HeroBannerCarousel({ banners, loading }: { banners: BannerDto[]; loadin
     }))
     .filter((item) => item.image);
   const [activeIndex, setActiveIndex] = useState(0);
-  const activeBannerIndex = visibleBanners.length ? activeIndex % visibleBanners.length : 0;
+  const activeBannerIndex = visibleBanners.length
+    ? activeIndex % visibleBanners.length
+    : 0;
   const activeBanner = visibleBanners[activeBannerIndex] ?? visibleBanners[0];
 
   useEffect(() => {
@@ -161,7 +186,10 @@ function HeroBannerCarousel({ banners, loading }: { banners: BannerDto[]; loadin
 
   return (
     <section className="relative h-[260px] overflow-hidden rounded-md border bg-card md:h-[360px]">
-      <Link href={getBannerHref(activeBanner.banner, "/products")} className="absolute inset-0 block">
+      <Link
+        href={getBannerHref(activeBanner.banner, "/products")}
+        className="absolute inset-0 block"
+      >
         <Image
           key={activeBanner.image}
           src={activeBanner.image}
@@ -183,7 +211,9 @@ function HeroBannerCarousel({ banners, loading }: { banners: BannerDto[]; loadin
               aria-label={`Chuyen den banner ${index + 1}`}
               className={[
                 "h-2.5 rounded-full transition-all",
-                activeBannerIndex === index ? "w-8 bg-white" : "w-2.5 bg-white/60 hover:bg-white",
+                activeBannerIndex === index
+                  ? "w-8 bg-white"
+                  : "w-2.5 bg-white/60 hover:bg-white",
               ].join(" ")}
               onClick={() => setActiveIndex(index)}
             />
@@ -201,8 +231,11 @@ function CategoryGrid({
   categories: CategoryDto[];
   loading: boolean;
 }) {
+  const getCategoryImage = (category: CategoryDto) =>
+    resolveAssetUrl(category.imageUrl || category.image || category.icon || category.thumbnail);
+
   return (
-    <HomeSection title="Danh muc san pham" description="Chon nhanh nhom hang can mua" actionHref="/categories">
+    <HomeSection title="Danh mục sản phẩm" actionHref="/categories">
       {loading ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {Array.from({ length: 12 }).map((_, index) => (
@@ -213,16 +246,36 @@ function CategoryGrid({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {categories.slice(0, 12).map((category, index) => (
             <Link
-              key={category.id || category._id || category.slug || `${category.name}-${index}`}
+              key={
+                category.id ||
+                category._id ||
+                category.slug ||
+                `${category.name}-${index}`
+              }
               href={`/categories/${category.slug || category.id || category._id}`}
-              className="rounded-md border bg-card p-4 transition-colors hover:border-primary hover:bg-accent"
+              className="grid gap-3 rounded-md border bg-card p-3 text-center transition-colors hover:border-primary hover:bg-accent"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-bold text-primary">
-                {category.name.slice(0, 1)}
-              </div>
-              <p className="mt-3 line-clamp-2 text-sm font-semibold">{category.name}</p>
+              <span className="relative mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-muted text-sm font-bold text-primary">
+                {getCategoryImage(category) ? (
+                  <Image
+                    src={getCategoryImage(category)}
+                    alt={category.name}
+                    fill
+                    unoptimized
+                    sizes="80px"
+                    className="object-cover"
+                  />
+                ) : (
+                  category.name.slice(0, 1)
+                )}
+              </span>
+              <p className="line-clamp-2 min-h-10 text-sm font-semibold">
+                {category.name}
+              </p>
               {typeof category.productCount === "number" ? (
-                <p className="mt-1 text-xs text-muted-foreground">{category.productCount} san pham</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {category.productCount} Sản phẩm
+                </p>
               ) : null}
             </Link>
           ))}
@@ -245,7 +298,11 @@ function PromotionSection({
   loading: boolean;
 }) {
   return (
-    <HomeSection title="Khuyen mai" description="Chuong trinh uu dai dang dien ra" actionHref="/promotions">
+    <HomeSection
+      title="Khuyen mai"
+      description="Chuong trinh uu dai dang dien ra"
+      actionHref="/promotions"
+    >
       {loading ? (
         <div className="grid gap-3 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
@@ -280,7 +337,10 @@ function PromotionSection({
           ))}
         </div>
       ) : (
-        <EmptyState title="Chua co khuyen mai" description="Cac chuong trinh uu dai se duoc cap nhat tai day." />
+        <EmptyState
+          title="Chua co khuyen mai"
+          description="Cac chuong trinh uu dai se duoc cap nhat tai day."
+        />
       )}
     </HomeSection>
   );
@@ -309,7 +369,13 @@ function MiddleBanner({ banner }: { banner?: BannerDto }) {
   );
 }
 
-function StoreSelection({ stores, loading }: { stores: StoreDto[]; loading: boolean }) {
+function StoreSelection({
+  stores,
+  loading,
+}: {
+  stores: StoreDto[];
+  loading: boolean;
+}) {
   if (loading) {
     return <LoadingSkeleton className="h-20 w-full" />;
   }
@@ -363,7 +429,10 @@ export function HomePage() {
       ] = await Promise.all([
         safeData(bannerService.getBanners(), []),
         safeData(categoryService.getCategoryTree(), []),
-        safeData(productService.getProducts({ sort: "best_selling", limit: 10 }), []),
+        safeData(
+          productService.getProducts({ sort: "best_selling", limit: 10 }),
+          [],
+        ),
         safeData(productService.getProducts({ sort: "newest", limit: 10 }), []),
         safeData(promotionService.getPromotions({ limit: 6 }), []),
         safeData(storeService.getStores({ limit: 3 }), []),
@@ -390,16 +459,24 @@ export function HomePage() {
   }, []);
 
   const suggestedProducts = useMemo(() => {
-    const merged = [...homeData.bestSellingProducts, ...homeData.newestProducts];
+    const merged = [
+      ...homeData.bestSellingProducts,
+      ...homeData.newestProducts,
+    ];
     const uniqueProducts = new Map(
-      merged.map((product) => [product.id || product._id || product.slug || product.name, product]),
+      merged.map((product) => [
+        product.id || product._id || product.slug || product.name,
+        product,
+      ]),
     );
     return Array.from(uniqueProducts.values()).slice(0, 10);
   }, [homeData.bestSellingProducts, homeData.newestProducts]);
 
   const heroBanners = useMemo(() => {
     const homeTopBanners = getBannersByPosition(homeData.banners, "HOME_TOP");
-    return homeTopBanners.length ? homeTopBanners : homeData.banners.filter((banner) => isActiveBanner(banner));
+    return homeTopBanners.length
+      ? homeTopBanners
+      : homeData.banners.filter((banner) => isActiveBanner(banner));
   }, [homeData.banners]);
 
   const middleBanner = useMemo(

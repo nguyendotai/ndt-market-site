@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 export type ProductGridProps = {
   products: Product[];
   className?: string;
+  compact?: boolean;
 };
 
 type ProductGridItem = {
@@ -12,7 +13,7 @@ type ProductGridItem = {
   variant?: ProductVariant;
 };
 
-export function ProductGrid({ products, className }: ProductGridProps) {
+export function ProductGrid({ products, className, compact = false }: ProductGridProps) {
   const items: ProductGridItem[] = products.flatMap((product) => {
     const variants = product.productVariants?.length ? product.productVariants : product.variants;
 
@@ -27,7 +28,13 @@ export function ProductGrid({ products, className }: ProductGridProps) {
     variant?.id || variant?._id || variant?.sku || variant?.value || variant?.name;
 
   return (
-    <div className={cn("grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5", className)}>
+    <div
+      className={cn(
+        "grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5",
+        compact && "grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6",
+        className,
+      )}
+    >
       {items.map(({ product, variant }, index) => (
         <ProductCard
           key={[
@@ -39,6 +46,7 @@ export function ProductGrid({ products, className }: ProductGridProps) {
             .join("-")}
           product={product}
           variant={variant}
+          compact={compact}
         />
       ))}
     </div>

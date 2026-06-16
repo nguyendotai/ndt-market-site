@@ -41,6 +41,37 @@ const getProductVariants = (product: Product) => {
   return variants ?? [];
 };
 
+const getVariantId = (variant?: ReturnType<typeof getProductVariants>[number]) =>
+  variant?.id || variant?._id || variant?.barcode || variant?.sku || variant?.name;
+
+const buildVariantPreviewItems = (products: Product[], seed = 0) => {
+  const seenProductIds = new Set<string>();
+
+  return products
+    .filter((product) => {
+      const productId = getProductId(product);
+      if (seenProductIds.has(productId)) return false;
+      seenProductIds.add(productId);
+      return true;
+    })
+    .map((product, index) => {
+      const variants = getProductVariants(product);
+      const variant = variants.length ? variants[(index + seed) % variants.length] : undefined;
+      const variantName = variant?.name || variant?.value || variant?.barcode || variant?.sku;
+      const price = variant?.salePrice ?? variant?.price ?? product.price ?? 0;
+      const image = variant?.imageUrl || variant?.image || variant?.images?.[0] || getProductImage(product) || fallbackProductImage;
+
+      return {
+        product,
+        variant,
+        id: `${getProductId(product)}-${getVariantId(variant) || "default"}`,
+        name: variantName ? `${product.name} - ${variantName}` : product.name,
+        price,
+        image,
+      };
+    });
+};
+
 const flattenCategories = (categories: CategoryDto[]) => {
   const result: CategoryDto[] = [];
   const walk = (items: CategoryDto[]) => {
@@ -142,32 +173,12 @@ export function SearchBar({ className, compact = false }: SearchBarProps) {
   }, [debouncedKeyword, matchedCategories, products, recentSearches]);
 
   const suggestedProductVariants = useMemo(() => {
-    const seenProductIds = new Set<string>();
-
-    return products
-      .filter((product) => {
-        const productId = getProductId(product);
-        if (seenProductIds.has(productId)) return false;
-        seenProductIds.add(productId);
-        return true;
-      })
-      .map((product, index) => {
-        const variants = getProductVariants(product);
-        const variant = variants.length ? variants[(index + debouncedKeyword.length) % variants.length] : undefined;
-        const variantName = variant?.name || variant?.value || variant?.barcode || variant?.sku;
-        const price = variant?.salePrice ?? variant?.price ?? product.price ?? 0;
-        const image = variant?.imageUrl || variant?.image || variant?.images?.[0] || getProductImage(product) || fallbackProductImage;
-
-        return {
-          product,
-          variant,
-          id: `${getProductId(product)}-${variant?.id || variant?._id || variant?.barcode || variant?.sku || "default"}`,
-          name: variantName ? `${product.name} - ${variantName}` : product.name,
-          price,
-          image,
-        };
-      });
+    return buildVariantPreviewItems(products, debouncedKeyword.length);
   }, [debouncedKeyword.length, products]);
+
+  const featuredProductVariants = useMemo(() => {
+    return buildVariantPreviewItems(featuredProducts, 1).slice(0, 4);
+  }, [featuredProducts]);
 
   const viewMoreHref = useMemo(() => {
     const term = debouncedKeyword.trim();
@@ -349,32 +360,34 @@ export function SearchBar({ className, compact = false }: SearchBarProps) {
                 </section>
               ) : null}
 
-              {featuredProducts.length > 0 ? (
+              {featuredProductVariants.length > 0 ? (
                 <section className="p-4">
                   <h2 className="mb-3 text-sm font-semibold text-foreground">San pham noi bat</h2>
                   <div className="grid gap-4 sm:grid-cols-4">
-                    {featuredProducts.map((product) => (
+                    {featuredProductVariants.map((item) => (
                       <button
-                        key={getProductId(product)}
+                        key={item.id}
                         type="button"
                         className="grid gap-3 text-left"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => {
                           setOpen(false);
-                          router.push(`/products/${encodeURIComponent(product.slug || getProductId(product))}`);
+                          const variantId = getVariantId(item.variant);
+                          const query = variantId ? `?variant=${encodeURIComponent(variantId)}` : "";
+                          router.push(`/products/${encodeURIComponent(item.product.slug || getProductId(item.product))}${query}`);
                         }}
                       >
                         <span className="relative aspect-[4/3] overflow-hidden rounded-md bg-muted">
                           <Image
-                            src={getProductImage(product) || fallbackProductImage}
-                            alt={product.name}
+                            src={item.image}
+                            alt={item.name}
                             fill
                             sizes="180px"
                             className="object-cover"
                           />
                         </span>
-                        <span className="line-clamp-2 min-h-10 text-sm text-muted-foreground">{product.name}</span>
-                        <span className="text-sm font-semibold">{formatCurrency(product.price ?? 0)}</span>
+                        <span className="line-clamp-2 min-h-10 text-sm text-muted-foreground">{item.name}</span>
+                        <span className="text-sm font-semibold">{formatCurrency(item.price)}</span>
                       </button>
                     ))}
                   </div>

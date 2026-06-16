@@ -2,16 +2,15 @@
 
 import { Toaster } from "sonner";
 import { AuthBootstrap } from "@/modules/auth/components/AuthBootstrap";
+import { CartBootstrap } from "@/modules/cart/components/CartBootstrap";
 import { ReduxProvider } from "@/providers/ReduxProvider";
-import { ThemeProvider } from "@/providers/ThemeProvider";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ReduxProvider>
-      <ThemeProvider>
-        <AuthBootstrap>{children}</AuthBootstrap>
-        <Toaster richColors position="top-right" />
-      </ThemeProvider>
+      <AuthBootstrap>{children}</AuthBootstrap>
+      <CartBootstrap />
+      <Toaster richColors position="top-right" />
     </ReduxProvider>
   );
 }
