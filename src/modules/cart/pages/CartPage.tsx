@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CartLineItem } from "@/modules/cart/components/CartLineItem";
 import { CartSummary } from "@/modules/cart/components/CartSummary";
+import { CartStoreSelector } from "@/modules/cart/components/CartStoreSelector";
 import { useAppSelector } from "@/store/hooks";
 
 export function CartPage() {
@@ -34,6 +35,8 @@ export function CartPage() {
           <span>{error}</span>
         </div>
       ) : null}
+
+      <CartStoreSelector className="mb-5" />
 
       {items.length === 0 ? (
         <Card className="shadow-none">

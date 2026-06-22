@@ -8,6 +8,7 @@ export type QuantityInputProps = {
   value: number;
   min?: number;
   max?: number;
+  step?: number;
   onChange: (value: number) => void;
   "aria-label"?: string;
 };
@@ -16,6 +17,7 @@ export function QuantityInput({
   value,
   min = 1,
   max = 99,
+  step = 1,
   onChange,
   "aria-label": ariaLabel = "So luong",
 }: QuantityInputProps) {
@@ -31,7 +33,7 @@ export function QuantityInput({
         size="icon"
         className="h-9 w-9 rounded-none"
         aria-label="Giam so luong"
-        onClick={() => updateValue(value - 1)}
+        onClick={() => updateValue(value - step)}
       >
         <Minus className="h-4 w-4" />
       </Button>
@@ -50,7 +52,7 @@ export function QuantityInput({
         size="icon"
         className="h-9 w-9 rounded-none"
         aria-label="Tang so luong"
-        onClick={() => updateValue(value + 1)}
+        onClick={() => updateValue(value + step)}
       >
         <Plus className="h-4 w-4" />
       </Button>

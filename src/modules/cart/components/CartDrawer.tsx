@@ -5,6 +5,7 @@ import { X, ShoppingBasket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CartLineItem } from "@/modules/cart/components/CartLineItem";
 import { CartSummary } from "@/modules/cart/components/CartSummary";
+import { CartStoreSelector } from "@/modules/cart/components/CartStoreSelector";
 import { useAppSelector } from "@/store/hooks";
 import { cn } from "@/lib/utils";
 
@@ -55,22 +56,28 @@ export function CartDrawer({
         </div>
 
         {items.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
-            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-primary">
-              <ShoppingBasket className="h-7 w-7" />
-            </span>
-            <div>
-              <p className="font-semibold">Gio hang dang trong</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Chon san pham de xem nhanh tai day.
-              </p>
+          <div className="grid flex-1 content-center gap-4 p-6">
+            <CartStoreSelector />
+            <div className="flex flex-col items-center gap-4 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-primary">
+                <ShoppingBasket className="h-7 w-7" />
+              </span>
+              <div>
+                <p className="font-semibold">Gio hang dang trong</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Chon san pham de xem nhanh tai day.
+                </p>
+              </div>
+              <Button asChild onClick={onClose}>
+                <Link href="/products">Mua sam ngay</Link>
+              </Button>
             </div>
-            <Button asChild onClick={onClose}>
-              <Link href="/products">Mua sam ngay</Link>
-            </Button>
           </div>
         ) : (
           <>
+            <div className="shrink-0 border-b p-4">
+              <CartStoreSelector />
+            </div>
             <div className="min-h-0 flex-1 divide-y overflow-y-auto">
               {items.map((item) => (
                 <div key={`${item.productId}-${item.variantId || "default"}`} className="p-4">

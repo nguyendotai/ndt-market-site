@@ -3,6 +3,7 @@ import type { Id, ListQueryParams } from "@/services/types";
 
 export type StoreDto = {
   id: Id;
+  _id?: Id;
   name: string;
   address: string;
   phone?: string;

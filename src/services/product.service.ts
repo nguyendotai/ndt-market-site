@@ -5,11 +5,7 @@ import type { Id, ListQueryParams } from "@/services/types";
 export type ProductQueryParams = ListQueryParams & {
   keyword?: string;
   category?: string;
-  categoryId?: Id;
-  categorySlug?: string;
   brand?: string;
-  brandId?: Id;
-  brandSlug?: string;
   minPrice?: number;
   maxPrice?: number;
   origin?: string;
@@ -23,19 +19,33 @@ export type ProductQueryParams = ListQueryParams & {
 
 export const productService = {
   getProducts: (params?: ProductQueryParams) => http.get<Product[]>("/products", { params }),
-  searchProducts: (params?: ProductQueryParams) => http.get<Product[]>("/products/search", { params }),
+  searchProducts: (params?: ProductQueryParams) => http.get<Product[]>("/products", { params }),
   getFeaturedProducts: (params?: ListQueryParams) =>
-    http.get<Product[]>("/products/featured", { params }),
+    http.get<Product[]>("/products", { params: { ...params, isFeatured: true } }),
   getBestSellerProducts: (params?: ListQueryParams) =>
-    http.get<Product[]>("/products/best-sellers", { params }),
+    http.get<Product[]>("/products", { params: { ...params, sort: params?.sort ?? "best_selling" } }),
   getPromotionProducts: (params?: ListQueryParams) =>
-    http.get<Product[]>("/products/promotions", { params }),
+    http.get<Product[]>("/products", { params: { ...params, isPromotion: true } }),
   getProductsByCategory: (categoryIdOrSlug: Id) =>
-    http.get<Product[]>(`/products/category/${categoryIdOrSlug}`),
-  getProductsByBrand: (brandIdOrSlug: Id) => http.get<Product[]>(`/products/brand/${brandIdOrSlug}`),
+    http.get<Product[]>("/products", { params: { category: categoryIdOrSlug } }),
+  getProductsByBrand: (brandIdOrSlug: Id) =>
+    http.get<Product[]>("/products", { params: { brand: brandIdOrSlug } }),
   getRelatedProducts: (slug: Id) => http.get<Product[]>(`/products/${slug}/related`),
-  getVariantInventory: (variantId: Id) =>
-    http.get<{ variantId: Id; stock: number; inStock: boolean }>(`/products/${variantId}/inventory`),
+  getVariantInventory: (variantId: Id, storeId?: Id) =>
+    http.get<Array<{
+      variantId?: Id;
+      storeId?: Id;
+      store?: Id | { _id?: Id; id?: Id };
+      stock?: number;
+      availableStock?: number;
+      quantityBase?: number;
+      reservedQuantityBase?: number;
+      availableQuantityBase?: number;
+      inStock?: boolean;
+    }>>(
+      `/products/${variantId}/inventory`,
+      { params: { store: storeId, storeId } },
+    ),
   getProductById: (id: Id) => http.get<Product>(`/products/${id}`),
   getProductBySlug: (slug: string) => http.get<Product>(`/products/${slug}`),
 };

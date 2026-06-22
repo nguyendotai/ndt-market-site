@@ -2,13 +2,17 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 import { Plus, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { AddToCartModal, type AddToCartModalSelection } from "@/components/product/AddToCartModal";
 import { PriceDisplay } from "@/components/product/PriceDisplay";
-import { addCartItem } from "@/store/slices/cartSlice";
-import { useAppDispatch } from "@/store/hooks";
+import { addCartItem, setCartDeliveryType, setCartStore } from "@/store/slices/cartSlice";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { productService } from "@/services/product.service";
+import { getAvailableStock, isInventoryAvailable } from "@/lib/inventory";
 import { cn } from "@/lib/utils";
 import type { Product, ProductImage, ProductVariant } from "@/types/product";
 
@@ -46,6 +50,21 @@ const getVariantLabel = (variant?: ProductVariant) => {
   return variant.name || variant.value || variant.sku || "";
 };
 
+const getSalePrice = (value?: number) =>
+  typeof value === "number" && value > 0 ? value : undefined;
+
+const getConversionRate = (variant?: ProductVariant) =>
+  Math.max(1, variant?.conversionRateToInventoryUnit ?? 1);
+
+const getMinimumOrderQuantityBase = (variant?: ProductVariant) =>
+  Math.max(1, variant?.minOrderQuantity ?? variant?.stepQuantity ?? getConversionRate(variant));
+
+const isWeightBasedProduct = (variant?: ProductVariant) =>
+  variant?.saleType === "WEIGHT_BASED_PRODUCT";
+
+const getDisplayQuantityFromBase = (variant: ProductVariant | undefined, quantityBase: number) =>
+  quantityBase / getConversionRate(variant);
+
 export function ProductCard({
   product,
   variant,
@@ -56,29 +75,119 @@ export function ProductCard({
   compact?: boolean;
 }) {
   const dispatch = useAppDispatch();
+  const cartItems = useAppSelector((state) => state.cart.items);
+  const currentStoreId = useAppSelector((state) => state.cart.storeId);
+  const [cartModalOpen, setCartModalOpen] = useState(false);
+  const [cartLoading, setCartLoading] = useState(false);
+  const defaultVariant = variant ?? product.variants?.[0] ?? product.productVariants?.[0];
   const productId = getProductId(product);
-  const variantId = getVariantId(variant);
+  const variantId = getVariantId(defaultVariant);
   const productDetailHref = `/products/${encodeURIComponent(product.slug || productId)}${
     variantId ? `?variant=${encodeURIComponent(variantId)}` : ""
   }`;
-  const variantImage = variant?.imageUrl || variant?.image || variant?.images?.[0];
+  const variantImage = defaultVariant?.imageUrl || defaultVariant?.image || defaultVariant?.images?.[0];
   const productImage =
     variantImage || getProductThumbnail(product) || fallbackProductImage;
   const categoryLabel = getCategoryLabel(product.category);
-  const variantLabel = getVariantLabel(variant);
+  const variantLabel = getVariantLabel(defaultVariant);
   const displayName = variantLabel ? `${product.name} - ${variantLabel}` : product.name;
-  const displayPrice = variant?.salePrice ?? variant?.price ?? product.price ?? 0;
+  const activeSalePrice = getSalePrice(defaultVariant?.salePrice);
+  const displayPrice = activeSalePrice ?? defaultVariant?.price ?? product.price ?? 0;
   const displayCompareAtPrice =
-    variant?.compareAtPrice ??
-    (variant?.salePrice && variant.price ? variant.price : product.compareAtPrice);
-  const displayUnit = variant?.unit || product.unit || "sản phẩm";
-  const inStock = variant
-    ? variant.status !== "OUT_OF_STOCK" && variant.inStock !== false && variant.stock !== 0
+    activeSalePrice
+      ? defaultVariant?.compareAtPrice ?? defaultVariant?.price ?? product.compareAtPrice
+      : undefined;
+  const displayUnit = defaultVariant?.unit || defaultVariant?.sellUnit || product.unit || "sản phẩm";
+  const inStock = defaultVariant
+    ? defaultVariant.status !== "OUT_OF_STOCK" && defaultVariant.inStock !== false && defaultVariant.stock !== 0
     : product.status !== "OUT_OF_STOCK" && product.inStock !== false && product.stock !== 0;
+  const minimumOrderQuantityBase = getMinimumOrderQuantityBase(defaultVariant);
+  const minimumOrderQuantity = getDisplayQuantityFromBase(defaultVariant, minimumOrderQuantityBase);
+  const stock = defaultVariant?.stock ?? product.stock;
+  const currentCartItem = cartItems.find((item) => item.variantId === variantId);
+  const currentCartQuantityBase = currentCartItem?.quantityBase ?? currentCartItem?.quantity ?? 0;
+
+  const handleConfirmAddToCart = async ({ storeId, deliveryType }: AddToCartModalSelection) => {
+    if (!variantId) return;
+    setCartLoading(true);
+
+    try {
+      dispatch(setCartDeliveryType(deliveryType));
+      if (currentStoreId !== storeId) {
+        await dispatch(setCartStore(storeId)).unwrap();
+      }
+      const effectiveCartQuantityBase = currentStoreId === storeId ? currentCartQuantityBase : 0;
+      let availableStock = stock;
+
+      try {
+        const inventoryResponse = await productService.getVariantInventory(variantId, storeId);
+        availableStock = getAvailableStock(inventoryResponse.data, storeId) ?? availableStock;
+        if (!isInventoryAvailable(inventoryResponse.data, storeId)) {
+          toast.error("San pham da het hang tai cua hang da chon");
+          return;
+        }
+      } catch {
+        availableStock = stock;
+      }
+
+      const remainingAtStore =
+        typeof availableStock === "number" ? availableStock - effectiveCartQuantityBase : undefined;
+
+      if (remainingAtStore !== undefined && remainingAtStore <= 0) {
+        toast.error("So luong trong gio da dat toi da ton kho");
+        return;
+      }
+
+      if (remainingAtStore !== undefined && effectiveCartQuantityBase === 0 && minimumOrderQuantityBase > remainingAtStore) {
+        toast.error(
+          `Ton kho khong du so luong toi thieu. Toi thieu ${minimumOrderQuantityBase}, con ${remainingAtStore}.`,
+        );
+        return;
+      }
+
+      const quantityBaseToAdd =
+        remainingAtStore === undefined
+          ? minimumOrderQuantityBase
+          : effectiveCartQuantityBase > 0
+            ? Math.min(minimumOrderQuantityBase, remainingAtStore)
+            : minimumOrderQuantityBase;
+      const quantityToAdd = getDisplayQuantityFromBase(defaultVariant, quantityBaseToAdd);
+      const quantityPayload = isWeightBasedProduct(defaultVariant)
+        ? { quantityBase: quantityBaseToAdd }
+        : { quantity: quantityToAdd };
+
+      await dispatch(
+        addCartItem({
+          productId,
+          variantId,
+          name: displayName,
+          price: displayPrice,
+          unit: displayUnit,
+          image: productImage,
+          stock: availableStock,
+          inStock,
+          ...quantityPayload,
+          displayQuantity: quantityToAdd,
+          displayUnit,
+          inventoryUnit: defaultVariant?.inventoryUnit,
+          priceUnit: defaultVariant?.sellUnit || displayUnit,
+          saleType: defaultVariant?.saleType,
+          storeId,
+        }),
+      ).unwrap();
+      setCartModalOpen(false);
+      toast.success("Da them vao gio hang");
+    } catch (error) {
+      toast.error(String(error || "Khong the them vao gio hang"));
+    } finally {
+      setCartLoading(false);
+    }
+  };
 
   return (
-    <Card className="group flex flex-col overflow-hidden rounded-md border bg-card shadow-none transition hover:border-primary/60 hover:shadow-sm">
-      <div className={cn("relative shrink-0 bg-muted", compact ? "aspect-[1.05/1]" : "aspect-[4/3]")}>
+    <>
+      <Card className="group flex flex-col overflow-hidden rounded-md border bg-card shadow-none transition hover:border-primary/60 hover:shadow-sm">
+        <div className={cn("relative shrink-0 bg-muted", compact ? "aspect-[1.05/1]" : "aspect-[4/3]")}>
         {product.discountLabel ? (
           <span className={cn(
             "absolute left-2 top-2 z-10 rounded-md bg-secondary font-bold text-secondary-foreground",
@@ -139,32 +248,23 @@ export function ProductCard({
           <Button
             size="sm"
             className={cn("gap-1", compact ? "h-8 px-2.5" : "h-9 px-3")}
-            disabled={!inStock}
+            disabled={!inStock || !variantId}
             aria-label={`Them ${displayName} vao gio`}
-            onClick={() => {
-              void dispatch(
-                addCartItem({
-                  productId,
-                  variantId,
-                  name: displayName,
-                  price: displayPrice,
-                  unit: displayUnit,
-                  image: productImage,
-                  stock: variant?.stock ?? product.stock,
-                  inStock,
-                  quantity: 1,
-                }),
-              )
-                .unwrap()
-                .then(() => toast.success("Da them vao gio hang"))
-                .catch((error) => toast.error(String(error || "Khong the them vao gio hang")));
-            }}
+            onClick={() => setCartModalOpen(true)}
           >
             <ShoppingCart className="h-4 w-4" />
             <Plus className="h-3 w-3" />
           </Button>
         </div>
       </CardContent>
-    </Card>
+      </Card>
+      <AddToCartModal
+        open={cartModalOpen}
+        productName={displayName}
+        loading={cartLoading}
+        onClose={() => setCartModalOpen(false)}
+        onConfirm={handleConfirmAddToCart}
+      />
+    </>
   );
 }

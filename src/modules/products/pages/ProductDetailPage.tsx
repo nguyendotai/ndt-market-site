@@ -9,16 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/common/EmptyState";
 import { LoadingSkeleton } from "@/components/common/LoadingSkeleton";
+import { AddToCartModal, type AddToCartModalSelection } from "@/components/product/AddToCartModal";
 import { PriceDisplay } from "@/components/product/PriceDisplay";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { QuantityInput } from "@/components/product/QuantityInput";
 import { Breadcrumb } from "@/modules/products/components/Breadcrumb";
-import { addCartItem } from "@/store/slices/cartSlice";
-import { useAppDispatch } from "@/store/hooks";
+import { addCartItem, setCartDeliveryType, setCartStore } from "@/store/slices/cartSlice";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { productService } from "@/services/product.service";
 import { reviewService, type ReviewDto } from "@/services/review.service";
 import { wishlistService } from "@/services/wishlist.service";
-import type { Product, ProductImage, ProductVariant } from "@/types/product";
+import { getAvailableStock, isInventoryAvailable } from "@/lib/inventory";
+import type { Product, ProductComboItem, ProductImage, ProductVariant } from "@/types/product";
 
 type ProductDetailPageProps = {
   slug: string;
@@ -27,11 +29,12 @@ type ProductDetailPageProps = {
 const fallbackProductImage =
   "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=900&q=80";
 
-type ProductTab = "description" | "ingredients" | "reviews";
+type ProductTab = "description" | "ingredients" | "combo" | "reviews";
 
 const tabs: Array<{ value: ProductTab; label: string }> = [
   { value: "description", label: "Mo ta" },
   { value: "ingredients", label: "Thanh phan" },
+  { value: "combo", label: "Combo" },
   { value: "reviews", label: "Danh gia" },
 ];
 
@@ -71,8 +74,59 @@ const getProductThumbnail = (product: Product) => {
   );
 };
 
+const getSalePrice = (value?: number) =>
+  typeof value === "number" && value > 0 ? value : undefined;
+
+const getConversionRate = (variant?: ProductVariant) =>
+  Math.max(1, variant?.conversionRateToInventoryUnit ?? 1);
+
+const getMinimumOrderQuantityBase = (variant?: ProductVariant) =>
+  Math.max(1, variant?.minOrderQuantity ?? variant?.stepQuantity ?? getConversionRate(variant));
+
+const isWeightBasedProduct = (variant?: ProductVariant) =>
+  variant?.saleType === "WEIGHT_BASED_PRODUCT";
+
+const getDisplayQuantityFromBase = (variant: ProductVariant | undefined, quantityBase: number) =>
+  quantityBase / getConversionRate(variant);
+
+const getBaseQuantityFromDisplay = (variant: ProductVariant | undefined, quantity: number) =>
+  Math.round(quantity * getConversionRate(variant));
+
+const getMinimumOrderQuantity = (variant?: ProductVariant) =>
+  getDisplayQuantityFromBase(variant, getMinimumOrderQuantityBase(variant));
+
+const getStepQuantity = (variant?: ProductVariant) =>
+  getDisplayQuantityFromBase(variant, Math.max(1, variant?.stepQuantity ?? getConversionRate(variant)));
+
+const getMaximumOrderQuantity = (variant?: ProductVariant, product?: Product | null) =>
+  getDisplayQuantityFromBase(variant, variant?.maxOrderQuantity ?? variant?.stock ?? product?.stock ?? 99);
+
+const sanitizeHtml = (html?: string) =>
+  (html || "")
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "")
+    .replace(/\sjavascript:/gi, "");
+
+const formatIngredients = (ingredients?: string | string[]) => {
+  if (Array.isArray(ingredients)) return ingredients.filter(Boolean).join(", ");
+  return ingredients;
+};
+
+const getComboProductName = (item: ProductComboItem) => {
+  if (typeof item.product === "string") return item.product;
+  return item.product.name;
+};
+
+const getComboVariantName = (item: ProductComboItem) => {
+  if (!item.variant || typeof item.variant === "string") return "";
+  return item.variant.name || item.variant.value || item.variant.sku || "";
+};
+
 export function ProductDetailPage({ slug }: ProductDetailPageProps) {
   const dispatch = useAppDispatch();
+  const cartItems = useAppSelector((state) => state.cart.items);
+  const currentStoreId = useAppSelector((state) => state.cart.storeId);
   const router = useRouter();
   const searchParams = useSearchParams();
   const storeId = searchParams.get("storeId");
@@ -87,6 +141,8 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
   const [quantity, setQuantity] = useState(1);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [cartLoading, setCartLoading] = useState(false);
+  const [cartModalOpen, setCartModalOpen] = useState(false);
+  const [buyNowAfterAdd, setBuyNowAfterAdd] = useState(false);
   const [variantInventory, setVariantInventory] = useState<{
     variantId: string;
     stock: number;
@@ -107,9 +163,9 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
 
         if (!mounted) return;
         setProduct(productResponse.data);
-        const variants = productResponse.data.productVariants?.length
-          ? productResponse.data.productVariants
-          : productResponse.data.variants;
+        const variants = productResponse.data.variants?.length
+          ? productResponse.data.variants
+          : productResponse.data.productVariants;
         const requestedVariant = variants?.find((variant) => getVariantId(variant) === requestedVariantId);
         setSelectedVariant(requestedVariant ?? variants?.[0]);
         setRelatedProducts(relatedResponse.data ?? []);
@@ -141,10 +197,12 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
     return Array.from(new Set(images.length ? images : [fallbackProductImage]));
   }, [product, selectedVariant]);
 
-  const currentPrice = selectedVariant?.salePrice ?? selectedVariant?.price ?? product?.price ?? 0;
+  const currentSalePrice = getSalePrice(selectedVariant?.salePrice);
+  const currentPrice = currentSalePrice ?? selectedVariant?.price ?? product?.price ?? 0;
   const currentCompareAtPrice =
-    selectedVariant?.compareAtPrice ??
-    (selectedVariant?.salePrice && selectedVariant.price ? selectedVariant.price : product?.compareAtPrice);
+    currentSalePrice
+      ? selectedVariant?.compareAtPrice ?? selectedVariant?.price ?? product?.compareAtPrice
+      : undefined;
   const currentVariantId = getVariantId(selectedVariant);
   const matchedInventory =
     currentVariantId && variantInventory?.variantId === currentVariantId ? variantInventory : null;
@@ -152,14 +210,37 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
     storeId && selectedVariant && matchedInventory
       ? matchedInventory.inStock && matchedInventory.stock > 0
       : isProductInStock(product, selectedVariant, storeId);
-  const productVariants = product?.productVariants?.length ? product.productVariants : product?.variants;
-  const currentUnit = selectedVariant?.unit || product?.unit || "san pham";
+  const productVariants = product?.variants?.length ? product.variants : product?.productVariants;
+  const currentUnit = selectedVariant?.unit || selectedVariant?.sellUnit || product?.unit || "san pham";
+  const minOrderQuantity = getMinimumOrderQuantity(selectedVariant);
+  const stepQuantity = getStepQuantity(selectedVariant);
+  const stock = matchedInventory?.stock ?? selectedVariant?.stock ?? product?.stock;
+  const currentCartItem = cartItems.find((item) => item.variantId === currentVariantId);
+  const currentCartQuantityBase = currentCartItem?.quantityBase ?? currentCartItem?.quantity ?? 0;
+  const remainingStockBase = typeof stock === "number" ? stock - currentCartQuantityBase : undefined;
+  const remainingStock = remainingStockBase === undefined
+    ? undefined
+    : getDisplayQuantityFromBase(selectedVariant, remainingStockBase);
+  const maxOrderQuantity = Math.max(
+    minOrderQuantity,
+    Math.min(getMaximumOrderQuantity(selectedVariant, product), remainingStock ?? 99),
+  );
+  const canAddToCart = Boolean(currentVariantId) && inStock;
 
   const selectVariant = (variant: ProductVariant) => {
     setSelectedVariant(variant);
     setActiveImage(0);
-    setQuantity(1);
+    setQuantity(getMinimumOrderQuantity(variant));
   };
+
+  useEffect(() => {
+    setQuantity((current) =>
+      Math.min(
+        Math.max(getMinimumOrderQuantity(selectedVariant), current),
+        maxOrderQuantity,
+      ),
+    );
+  }, [maxOrderQuantity, selectedVariant]);
 
   const getVariantImage = (variant?: ProductVariant) =>
     variant?.imageUrl ||
@@ -171,10 +252,13 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
   const getVariantName = (variant?: ProductVariant) =>
     variant?.name || variant?.value || variant?.barcode || variant?.sku || "Mac dinh";
 
-  const getVariantPrice = (variant?: ProductVariant) => variant?.salePrice ?? variant?.price ?? product?.price ?? 0;
+  const getVariantPrice = (variant?: ProductVariant) =>
+    getSalePrice(variant?.salePrice) ?? variant?.price ?? product?.price ?? 0;
 
-  const getVariantCompareAtPrice = (variant?: ProductVariant) =>
-    variant?.compareAtPrice ?? (variant?.salePrice && variant.price ? variant.price : product?.compareAtPrice);
+  const getVariantCompareAtPrice = (variant?: ProductVariant) => {
+    const salePrice = getSalePrice(variant?.salePrice);
+    return salePrice ? variant?.compareAtPrice ?? variant?.price ?? product?.compareAtPrice : undefined;
+  };
 
   const isVariantInStock = (variant?: ProductVariant) =>
     variant?.status !== "OUT_OF_STOCK" && variant?.inStock !== false && variant?.stock !== 0;
@@ -187,12 +271,12 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
 
     const fetchInventory = async () => {
       try {
-        const response = await productService.getVariantInventory(variantId);
+        const response = await productService.getVariantInventory(variantId, storeId);
         if (!mounted) return;
         setVariantInventory({
           variantId: String(variantId),
-          stock: response.data.stock,
-          inStock: response.data.inStock,
+          stock: getAvailableStock(response.data, storeId) ?? 0,
+          inStock: isInventoryAvailable(response.data, storeId),
         });
       } catch {
         if (!mounted) return;
@@ -207,11 +291,60 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
     };
   }, [selectedVariant, storeId]);
 
-  const addToCart = async (buyNow = false) => {
+  const openAddToCartModal = (buyNow = false) => {
+    if (!product || !inStock) return;
+    setBuyNowAfterAdd(buyNow);
+    setCartModalOpen(true);
+  };
+
+  const confirmAddToCart = async ({ storeId: selectedStoreId, deliveryType }: AddToCartModalSelection) => {
     if (!product || !inStock) return;
     setCartLoading(true);
 
     try {
+      dispatch(setCartDeliveryType(deliveryType));
+      if (currentStoreId !== selectedStoreId) {
+        await dispatch(setCartStore(selectedStoreId)).unwrap();
+      }
+      const quantityBase = getBaseQuantityFromDisplay(selectedVariant, quantity);
+      const effectiveCartQuantityBase = currentStoreId === selectedStoreId ? currentCartQuantityBase : 0;
+      let availableStock = stock;
+
+      if (currentVariantId) {
+        try {
+          const inventoryResponse = await productService.getVariantInventory(currentVariantId, selectedStoreId);
+          availableStock = getAvailableStock(inventoryResponse.data, selectedStoreId) ?? availableStock;
+          if (!isInventoryAvailable(inventoryResponse.data, selectedStoreId)) {
+            toast.error("San pham da het hang tai cua hang da chon");
+            return;
+          }
+        } catch {
+          availableStock = stock;
+        }
+      }
+
+      const remainingAtStore =
+        typeof availableStock === "number" ? availableStock - effectiveCartQuantityBase : undefined;
+
+      if (remainingAtStore !== undefined && remainingAtStore <= 0) {
+        toast.error("So luong trong gio da dat toi da ton kho");
+        return;
+      }
+
+      if (remainingAtStore !== undefined && effectiveCartQuantityBase === 0 && quantityBase > remainingAtStore) {
+        toast.error(
+          `Ton kho khong du so luong toi thieu. Toi thieu ${quantityBase}, con ${remainingAtStore}.`,
+        );
+        return;
+      }
+
+      const quantityBaseToAdd =
+        remainingAtStore === undefined ? quantityBase : Math.min(quantityBase, remainingAtStore);
+      const quantityToAdd = getDisplayQuantityFromBase(selectedVariant, quantityBaseToAdd);
+      const quantityPayload = isWeightBasedProduct(selectedVariant)
+        ? { quantityBase: quantityBaseToAdd }
+        : { quantity: quantityToAdd };
+
       await dispatch(addCartItem({
         productId: getProductId(product),
         variantId: getVariantId(selectedVariant),
@@ -219,13 +352,19 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
         price: currentPrice,
         unit: currentUnit,
         image: galleryImages[activeImage] || getProductThumbnail(product) || fallbackProductImage,
-        stock: matchedInventory?.stock ?? selectedVariant?.stock ?? product.stock,
+        stock: availableStock,
         inStock,
-        quantity,
-        storeId: storeId || undefined,
+        ...quantityPayload,
+        displayQuantity: quantityToAdd,
+        displayUnit: currentUnit,
+        inventoryUnit: selectedVariant?.inventoryUnit,
+        priceUnit: selectedVariant?.sellUnit || currentUnit,
+        saleType: selectedVariant?.saleType,
+        storeId: selectedStoreId,
       })).unwrap();
+      setCartModalOpen(false);
       toast.success("Da them vao gio hang");
-      if (buyNow) router.push("/checkout");
+      if (buyNowAfterAdd) router.push("/checkout");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Them gio hang that bai");
     } finally {
@@ -362,15 +501,21 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
 
             <div className="grid gap-2">
               <p className="text-sm font-semibold">So luong</p>
-              <QuantityInput value={quantity} max={selectedVariant?.stock || product.stock || 99} onChange={setQuantity} />
+              <QuantityInput
+                value={quantity}
+                min={minOrderQuantity}
+                max={maxOrderQuantity}
+                step={stepQuantity}
+                onChange={setQuantity}
+              />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Button
                 type="button"
                 className="gap-2"
-                disabled={!inStock || cartLoading}
-                onClick={() => addToCart(false)}
+                disabled={!canAddToCart || cartLoading}
+                onClick={() => openAddToCartModal(false)}
               >
                 <ShoppingCart className="h-4 w-4" />
                 Them vao gio
@@ -378,8 +523,8 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
               <Button
                 type="button"
                 variant="secondary"
-                disabled={!inStock || cartLoading}
-                onClick={() => addToCart(true)}
+                disabled={!canAddToCart || cartLoading}
+                onClick={() => openAddToCartModal(true)}
               >
                 Mua ngay
               </Button>
@@ -454,7 +599,7 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
                           <PriceDisplay
                             price={getVariantPrice(variant)}
                             compareAtPrice={getVariantCompareAtPrice(variant)}
-                            unit={variant.unit || product.unit}
+                            unit={variant.unit || variant.sellUnit || product.unit}
                             className="gap-x-1 text-sm"
                           />
                           <span className={variantStock ? "block text-xs text-success" : "block text-xs text-destructive"}>
@@ -473,7 +618,9 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
 
       <section className="rounded-md border bg-card">
         <div className="flex overflow-x-auto border-b">
-          {tabs.map((tab) => (
+          {tabs
+            .filter((tab) => tab.value !== "combo" || Boolean(product.comboItems?.length))
+            .map((tab) => (
             <button
               key={tab.value}
               type="button"
@@ -489,14 +636,39 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
         </div>
         <div className="p-5">
           {activeTab === "description" ? (
-            <p className="leading-7 text-muted-foreground">
-              {product.description || "Mo ta san pham dang duoc cap nhat."}
-            </p>
+            product.description ? (
+              <div
+                className="prose prose-sm max-w-none leading-7 text-muted-foreground"
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(product.description) }}
+              />
+            ) : (
+              <p className="leading-7 text-muted-foreground">Mo ta san pham dang duoc cap nhat.</p>
+            )
           ) : null}
           {activeTab === "ingredients" ? (
             <p className="leading-7 text-muted-foreground">
-              {product.ingredients || "Thanh phan san pham dang duoc cap nhat."}
+              {formatIngredients(product.ingredients) || "Thanh phan san pham dang duoc cap nhat."}
             </p>
+          ) : null}
+          {activeTab === "combo" ? (
+            <div className="grid gap-3">
+              {product.comboItems?.map((item, index) => (
+                <div
+                  key={item.id || item._id || `${getComboProductName(item)}-${index}`}
+                  className="flex items-center justify-between gap-3 rounded-md border p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold">{getComboProductName(item)}</p>
+                    {getComboVariantName(item) ? (
+                      <p className="mt-1 text-sm text-muted-foreground">{getComboVariantName(item)}</p>
+                    ) : null}
+                  </div>
+                  <p className="shrink-0 text-sm font-semibold">
+                    {item.quantity} {item.unitLabel || ""}
+                  </p>
+                </div>
+              ))}
+            </div>
           ) : null}
           {activeTab === "reviews" ? (
             <div className="grid gap-3">
@@ -532,6 +704,13 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
           <EmptyState title="Chua co san pham lien quan" description="Backend chua tra ve goi y lien quan." />
         )}
       </section>
+      <AddToCartModal
+        open={cartModalOpen}
+        productName={selectedVariant ? `${product.name} - ${getVariantName(selectedVariant)}` : product.name}
+        loading={cartLoading}
+        onClose={() => setCartModalOpen(false)}
+        onConfirm={confirmAddToCart}
+      />
     </div>
   );
 }

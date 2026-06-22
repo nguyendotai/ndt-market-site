@@ -1,4 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import type { DeliveryType } from "@/constants/deliveryType";
 import { cartService, type CartDto, type CartItemDto } from "@/services/cart.service";
 import type { RootState } from "@/store";
 
@@ -12,6 +13,12 @@ export type CartItem = {
   price: number;
   unit: string;
   quantity: number;
+  quantityBase?: number;
+  displayQuantity?: number;
+  displayUnit?: string;
+  inventoryUnit?: string;
+  priceUnit?: string;
+  saleType?: string;
   image?: string;
   stock?: number;
   inStock?: boolean;
@@ -24,16 +31,19 @@ type CartState = {
   items: CartItem[];
   subtotal: number;
   total: number;
+  totalItems: number;
   storeId?: string;
+  deliveryType?: DeliveryType;
   status: CartStatus;
   isInitialized: boolean;
   error: string | null;
 };
 
-type CartSnapshot = Pick<CartState, "id" | "items" | "subtotal" | "total" | "storeId">;
+type CartSnapshot = Pick<CartState, "id" | "items" | "subtotal" | "total" | "totalItems" | "storeId" | "deliveryType">;
 
 type AddCartItemPayload = Omit<CartItem, "id" | "quantity"> & {
   quantity?: number;
+  quantityBase?: number;
   storeId?: string;
 };
 
@@ -42,6 +52,7 @@ type UpdateCartItemPayload = {
   productId: string;
   variantId?: string;
   quantity: number;
+  quantityBase?: number;
 };
 
 type RemoveCartItemPayload = {
@@ -54,6 +65,7 @@ const initialState: CartState = {
   items: [],
   subtotal: 0,
   total: 0,
+  totalItems: 0,
   status: "idle",
   isInitialized: false,
   error: null,
@@ -63,8 +75,6 @@ const canUseStorage = () => typeof window !== "undefined";
 
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
-
-const toId = (value: unknown) => (value === undefined || value === null ? "" : String(value));
 
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -96,23 +106,58 @@ const getBoolean = (...values: unknown[]) => {
   return undefined;
 };
 
+const getPositiveNumber = (...values: unknown[]) => {
+  const value = getNumber(...values);
+  return value && value > 0 ? value : undefined;
+};
+
+const clampPositiveQuantity = (quantity: number) => Math.max(0.001, quantity);
+
+const getImageFromImages = (value: unknown) => {
+  if (!Array.isArray(value)) return undefined;
+  const thumbnail = value.find((image) => asRecord(image).isThumbnail);
+  const firstImage = thumbnail ?? value[0];
+
+  if (typeof firstImage === "string") return firstImage;
+  const image = asRecord(firstImage);
+  return getString(image.imageUrl, image.url, image.src);
+};
+
 const getLineKey = (item: Pick<CartItem, "productId" | "variantId">) =>
   `${item.productId}::${item.variantId ?? "default"}`;
 
+const isPositiveFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value > 0;
+
+const buildCartQuantityPayload = (payload: { quantity?: number; quantityBase?: number }) => {
+  if (isPositiveFiniteNumber(payload.quantityBase)) {
+    return { quantityBase: payload.quantityBase };
+  }
+
+  if (isPositiveFiniteNumber(payload.quantity)) {
+    return { quantity: payload.quantity };
+  }
+
+  return { quantity: 1 };
+};
+
 const calculateTotals = (items: CartItem[], fallbackSubtotal?: number, fallbackTotal?: number) => {
-  const subtotal = fallbackSubtotal ?? items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal =
+    fallbackSubtotal ??
+    items.reduce((sum, item) => sum + item.price * (item.displayQuantity ?? item.quantity), 0);
   return {
     subtotal,
     total: fallbackTotal ?? subtotal,
+    totalItems: items.reduce((sum, item) => sum + (item.quantityBase ?? item.quantity), 0),
   };
 };
 
 const readLocalCart = (): CartSnapshot => {
-  if (!canUseStorage()) return { items: [], subtotal: 0, total: 0 };
+  if (!canUseStorage()) return { items: [], subtotal: 0, total: 0, totalItems: 0 };
 
   try {
     const rawCart = window.localStorage.getItem(LOCAL_CART_KEY);
-    if (!rawCart) return { items: [], subtotal: 0, total: 0 };
+    if (!rawCart) return { items: [], subtotal: 0, total: 0, totalItems: 0 };
     const parsed = JSON.parse(rawCart) as Partial<CartSnapshot>;
     const items = Array.isArray(parsed.items) ? parsed.items : [];
     const totals = calculateTotals(items);
@@ -122,11 +167,13 @@ const readLocalCart = (): CartSnapshot => {
       items,
       subtotal: totals.subtotal,
       total: totals.total,
+      totalItems: totals.totalItems,
       storeId: parsed.storeId,
+      deliveryType: parsed.deliveryType,
     };
   } catch {
     window.localStorage.removeItem(LOCAL_CART_KEY);
-    return { items: [], subtotal: 0, total: 0 };
+    return { items: [], subtotal: 0, total: 0, totalItems: 0 };
   }
 };
 
@@ -138,7 +185,9 @@ const writeLocalCart = (cart: CartSnapshot) => {
       items: cart.items,
       subtotal: cart.subtotal,
       total: cart.total,
+      totalItems: cart.totalItems,
       storeId: cart.storeId,
+      deliveryType: cart.deliveryType,
     }),
   );
 };
@@ -152,18 +201,43 @@ const normalizeCartItem = (item: CartItemDto): CartItem | null => {
   const raw = asRecord(item);
   const product = getNestedRecord(item, "product");
   const variant = getNestedRecord(item, "variant");
-  const productId = getString(raw.productId, raw.product, product.id, product._id, product.slug);
+  const productFromVariant = getNestedRecord(variant, "product");
+  const productId = getString(
+    raw.productId,
+    raw.product,
+    product.id,
+    product._id,
+    product.slug,
+    variant.product,
+    productFromVariant.id,
+    productFromVariant._id,
+    productFromVariant.slug,
+  );
 
   if (!productId) return null;
 
   const variantId = getString(raw.variantId, raw.variant, variant.id, variant._id, variant.sku);
-  const stock = getNumber(raw.stock, raw.availableStock, variant.stock, product.stock);
+  const stock = getNumber(
+    raw.availableQuantityBase,
+    raw.quantityBaseAvailable,
+    raw.stock,
+    raw.availableStock,
+    variant.stock,
+    product.stock,
+  );
   const explicitInStock = getBoolean(raw.inStock, variant.inStock, product.inStock);
   const statusInStock =
     raw.status !== "OUT_OF_STOCK" &&
     variant.status !== "OUT_OF_STOCK" &&
     product.status !== "OUT_OF_STOCK";
   const inStock = explicitInStock ?? statusInStock;
+  const salePrice = getPositiveNumber(raw.salePrice, variant.salePrice);
+  const price = salePrice ?? getNumber(raw.priceSnapshot, raw.price, variant.price, product.price) ?? 0;
+  const displayQuantity = Math.max(0, getNumber(raw.displayQuantity, raw.quantity, raw.qty) ?? 1);
+  const quantityBase = getNumber(raw.quantityBase);
+  const displayUnit = getString(raw.displayUnit, variant.sellUnit, raw.unit, variant.unit, product.unit);
+  const inventoryUnit = getString(raw.inventoryUnit, variant.inventoryUnit);
+  const priceUnit = getString(raw.priceUnit, variant.sellUnit, raw.unit, variant.unit, product.unit);
 
   return {
     id: getString(raw.id, raw._id),
@@ -172,10 +246,26 @@ const normalizeCartItem = (item: CartItemDto): CartItem | null => {
     name:
       getString(raw.name, raw.productName, product.name, variant.name) ??
       "San pham",
-    price: getNumber(raw.price, raw.salePrice, variant.salePrice, variant.price, product.price) ?? 0,
-    unit: getString(raw.unit, variant.unit, product.unit) ?? "san pham",
-    quantity: Math.max(1, getNumber(raw.quantity, raw.qty) ?? 1),
-    image: getString(raw.image, raw.imageUrl, variant.imageUrl, variant.image, product.imageUrl, product.image, product.thumbnail),
+    price,
+    unit: displayUnit ?? priceUnit ?? "san pham",
+    quantity: displayQuantity,
+    quantityBase,
+    displayQuantity,
+    displayUnit,
+    inventoryUnit,
+    priceUnit,
+    saleType: getString(raw.saleType, variant.saleType),
+    image: getString(
+      raw.image,
+      raw.imageUrl,
+      variant.imageUrl,
+      variant.image,
+      getImageFromImages(variant.images),
+      product.imageUrl,
+      product.image,
+      product.thumbnail,
+      getImageFromImages(product.images),
+    ),
     stock,
     inStock: stock === undefined ? inStock : inStock && stock > 0,
   };
@@ -183,6 +273,7 @@ const normalizeCartItem = (item: CartItemDto): CartItem | null => {
 
 const normalizeCart = (cart?: CartDto | null): CartSnapshot => {
   const raw = asRecord(cart);
+  const store = getNestedRecord(cart, "store");
   const items = (Array.isArray(raw.items) ? raw.items : [])
     .map((item) => normalizeCartItem(item as CartItemDto))
     .filter((item): item is CartItem => Boolean(item));
@@ -197,21 +288,32 @@ const normalizeCart = (cart?: CartDto | null): CartSnapshot => {
     items,
     subtotal: totals.subtotal,
     total: totals.total,
-    storeId: getString(raw.storeId, raw.store),
+    totalItems: getNumber(raw.totalItems) ?? totals.totalItems,
+    storeId: getString(raw.storeId, raw.store, store.id, store._id),
   };
 };
 
 const upsertLocalItem = (cart: CartSnapshot, payload: AddCartItemPayload): CartSnapshot => {
-  const quantity = Math.max(1, payload.quantity ?? 1);
+  const quantity = clampPositiveQuantity(payload.quantity ?? 1);
+  const quantityBase = Math.max(1, payload.quantityBase ?? quantity);
   const items = [...cart.items];
   const index = items.findIndex((item) => getLineKey(item) === getLineKey(payload));
 
   if (index >= 0) {
     const current = items[index];
+    const nextQuantityBase = current.stock === undefined
+      ? (current.quantityBase ?? current.quantity) + quantityBase
+      : Math.min(current.stock, (current.quantityBase ?? current.quantity) + quantityBase);
     const nextQuantity = current.stock === undefined
       ? current.quantity + quantity
       : Math.min(current.stock, current.quantity + quantity);
-    items[index] = { ...current, ...payload, quantity: Math.max(1, nextQuantity) };
+    items[index] = {
+      ...current,
+      ...payload,
+      quantity: clampPositiveQuantity(nextQuantity),
+      displayQuantity: clampPositiveQuantity(nextQuantity),
+      quantityBase: Math.max(1, nextQuantityBase),
+    };
   } else {
     items.push({
       productId: payload.productId,
@@ -222,7 +324,13 @@ const upsertLocalItem = (cart: CartSnapshot, payload: AddCartItemPayload): CartS
       image: payload.image,
       stock: payload.stock,
       inStock: payload.inStock,
-      quantity: payload.stock === undefined ? quantity : Math.min(payload.stock, quantity),
+      quantityBase: payload.stock === undefined ? quantityBase : Math.min(payload.stock, quantityBase),
+      displayQuantity: quantity,
+      displayUnit: payload.displayUnit,
+      inventoryUnit: payload.inventoryUnit,
+      priceUnit: payload.priceUnit,
+      saleType: payload.saleType,
+      quantity: payload.stock === undefined ? quantity : clampPositiveQuantity(Math.min(payload.stock, quantity)),
     });
   }
 
@@ -240,7 +348,13 @@ const updateLocalItem = (cart: CartSnapshot, payload: UpdateCartItemPayload): Ca
       const quantity = item.stock === undefined
         ? payload.quantity
         : Math.min(item.stock, payload.quantity);
-      return { ...item, quantity: Math.max(1, quantity) };
+      const quantityBase = payload.quantityBase ?? quantity;
+      return {
+        ...item,
+        quantity: clampPositiveQuantity(quantity),
+        displayQuantity: clampPositiveQuantity(quantity),
+        quantityBase: Math.max(1, quantityBase),
+      };
     })
     .filter((item) => item.quantity > 0);
   const totals = calculateTotals(items);
@@ -256,6 +370,20 @@ const removeLocalItem = (cart: CartSnapshot, payload: RemoveCartItemPayload): Ca
 };
 
 const isAuthenticated = (state: RootState) => state.auth.status === "authenticated";
+const getSelectedStoreId = (state: RootState, payloadStoreId?: string) =>
+  payloadStoreId || state.cart.storeId;
+
+function requireVariant(variantId?: string): asserts variantId is string {
+  if (!variantId) {
+    throw new Error("Vui long chon phan loai san pham truoc khi them vao gio");
+  }
+}
+
+function requireStore(storeId?: string): asserts storeId is string {
+  if (!storeId) {
+    throw new Error("Vui long chon cua hang truoc khi them san pham vao gio");
+  }
+}
 
 export const initializeCart = createAsyncThunk<CartSnapshot, void, { state: RootState; rejectValue: string }>(
   "cart/initialize",
@@ -267,12 +395,17 @@ export const initializeCart = createAsyncThunk<CartSnapshot, void, { state: Root
     }
 
     try {
-      for (const item of localCart.items) {
+      if (localCart.items.length > 0 && localCart.storeId) {
+        await cartService.setStore(localCart.storeId);
+      }
+
+      for (const item of localCart.storeId ? localCart.items : []) {
+        requireVariant(item.variantId);
+        const variantId = item.variantId;
+        const quantityPayload = buildCartQuantityPayload(item);
         await cartService.addItem({
-          productId: item.productId,
-          variantId: item.variantId,
-          quantity: item.quantity,
-          storeId: localCart.storeId,
+          variant: variantId,
+          ...quantityPayload,
         });
       }
 
@@ -288,18 +421,33 @@ export const initializeCart = createAsyncThunk<CartSnapshot, void, { state: Root
 export const addCartItem = createAsyncThunk<CartSnapshot, AddCartItemPayload, { state: RootState; rejectValue: string }>(
   "cart/addItem",
   async (payload, { getState, rejectWithValue }) => {
-    if (!isAuthenticated(getState())) {
+    const state = getState();
+    const storeId = getSelectedStoreId(state, payload.storeId);
+
+    try {
+      requireStore(storeId);
+      requireVariant(payload.variantId);
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error, "Khong the them san pham vao gio"));
+    }
+
+    if (!isAuthenticated(state)) {
       const nextCart = upsertLocalItem(readLocalCart(), payload);
       writeLocalCart(nextCart);
       return nextCart;
     }
 
     try {
+      if (payload.storeId && payload.storeId !== state.cart.storeId) {
+        await cartService.setStore(payload.storeId);
+      }
+
+      const variantId = payload.variantId;
+      requireVariant(variantId);
+      const quantityPayload = buildCartQuantityPayload(payload);
       const response = await cartService.addItem({
-        productId: payload.productId,
-        variantId: payload.variantId,
-        quantity: payload.quantity ?? 1,
-        storeId: payload.storeId,
+        variant: variantId,
+        ...quantityPayload,
       });
       return normalizeCart(response.data);
     } catch (error) {
@@ -318,7 +466,8 @@ export const updateCartItem = createAsyncThunk<CartSnapshot, UpdateCartItemPaylo
     }
 
     try {
-      const response = await cartService.updateItem(payload.itemId, { quantity: payload.quantity });
+      const quantityPayload = buildCartQuantityPayload(payload);
+      const response = await cartService.updateItem(payload.itemId, quantityPayload);
       return normalizeCart(response.data);
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Khong the cap nhat gio hang"));
@@ -349,7 +498,7 @@ export const clearCart = createAsyncThunk<CartSnapshot, void, { state: RootState
   async (_, { getState, rejectWithValue }) => {
     if (!isAuthenticated(getState())) {
       clearLocalCart();
-      return { items: [], subtotal: 0, total: 0 };
+      return { items: [], subtotal: 0, total: 0, totalItems: 0 };
     }
 
     try {
@@ -366,7 +515,10 @@ export const setCartStore = createAsyncThunk<CartSnapshot, string, { state: Root
   async (storeId, { getState, rejectWithValue }) => {
     if (!isAuthenticated(getState())) {
       const localCart = readLocalCart();
-      const nextCart = { ...localCart, storeId };
+      const storeChanged = localCart.storeId && localCart.storeId !== storeId;
+      const nextCart = storeChanged
+        ? { items: [], subtotal: 0, total: 0, totalItems: 0, storeId, deliveryType: localCart.deliveryType }
+        : { ...localCart, storeId };
       writeLocalCart(nextCart);
       return nextCart;
     }
@@ -386,6 +538,7 @@ const applyCartSnapshot = (state: CartState, cart: CartSnapshot) => {
   state.subtotal = cart.subtotal;
   state.total = cart.total;
   state.storeId = cart.storeId;
+  state.deliveryType = cart.deliveryType;
   state.status = "ready";
   state.isInitialized = true;
   state.error = null;
@@ -404,6 +557,10 @@ const cartSlice = createSlice({
       const nextCart = removeLocalItem(state, action.payload);
       applyCartSnapshot(state, nextCart);
       writeLocalCart(nextCart);
+    },
+    setCartDeliveryType: (state, action: PayloadAction<DeliveryType>) => {
+      state.deliveryType = action.payload;
+      writeLocalCart(state);
     },
   },
   extraReducers: (builder) => {
@@ -464,5 +621,5 @@ const cartSlice = createSlice({
   },
 });
 
-export const { addToCart, removeFromCart } = cartSlice.actions;
+export const { addToCart, removeFromCart, setCartDeliveryType } = cartSlice.actions;
 export default cartSlice.reducer;

@@ -24,7 +24,21 @@ axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error?.response?.status as number | undefined;
-    const backendMessage = error?.response?.data?.message as string | undefined;
+    const rawMessage = error?.response?.data?.message;
+    const rawErrors = error?.response?.data?.errors;
+    const backendMessage =
+      typeof rawMessage === "string"
+        ? rawMessage
+        : Array.isArray(rawMessage)
+          ? rawMessage.join(", ")
+          : Array.isArray(rawErrors)
+            ? rawErrors
+                .map((item) =>
+                  typeof item === "string" ? item : item?.message || item?.msg || item?.path,
+                )
+                .filter(Boolean)
+                .join(", ")
+            : undefined;
     const fallbackMessage =
       status === 401
         ? "Phien dang nhap da het han"

@@ -3,12 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, Store, Tag } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, Store, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/common/EmptyState";
 import { LoadingSkeleton } from "@/components/common/LoadingSkeleton";
-import { ProductGrid } from "@/modules/products/components/ProductGrid";
+import { ProductCard } from "@/components/product/ProductCard";
 import { bannerService, type BannerDto } from "@/services/banner.service";
 import { categoryService, type CategoryDto } from "@/services/category.service";
 import { productService } from "@/services/product.service";
@@ -25,8 +25,14 @@ type HomeState = {
   categories: CategoryDto[];
   bestSellingProducts: Product[];
   newestProducts: Product[];
+  categoryProductSections: CategoryProductSection[];
   promotions: PromotionDto[];
   stores: StoreDto[];
+};
+
+type CategoryProductSection = {
+  category: CategoryDto;
+  products: Product[];
 };
 
 const initialHomeState: HomeState = {
@@ -34,6 +40,7 @@ const initialHomeState: HomeState = {
   categories: [],
   bestSellingProducts: [],
   newestProducts: [],
+  categoryProductSections: [],
   promotions: [],
   stores: [],
 };
@@ -80,6 +87,24 @@ const getBannersByPosition = (banners: BannerDto[], position: string) =>
     )
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
+const getCategoryHref = (category: CategoryDto) =>
+  `/categories/${encodeURIComponent(category.slug || String(category.id || category._id || ""))}`;
+
+const getCategoryBannerImage = (category: CategoryDto) =>
+  resolveAssetUrl(category.bannerImage || category.banner || category.imageUrl || category.image || category.thumbnail);
+
+const flattenCategories = (categories: CategoryDto[]) => {
+  const result: CategoryDto[] = [];
+  const walk = (items: CategoryDto[]) => {
+    items.forEach((item) => {
+      result.push(item);
+      if (item.children?.length) walk(item.children);
+    });
+  };
+  walk(categories);
+  return result;
+};
+
 function HomeSection({
   title,
   description,
@@ -111,34 +136,189 @@ function HomeSection({
   );
 }
 
-function ProductSection({
+function ProductCarouselGrid({
+  products,
+  loading,
+}: {
+  products: Product[];
+  loading: boolean;
+}) {
+  const [offset, setOffset] = useState(0);
+  const canShift = products.length > 12;
+  const visibleProducts = products.slice(offset, offset + 12);
+
+  useEffect(() => {
+    setOffset(0);
+  }, [products]);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+        {Array.from({ length: 12 }).map((_, index) => (
+          <LoadingSkeleton key={index} className="h-64 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (products.length === 0) {
+    return (
+      <EmptyState
+        title="Chua co san pham"
+        description="Danh sach san pham se hien thi khi backend tra ve du lieu."
+      />
+    );
+  }
+
+  return (
+    <div className="relative">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+        {visibleProducts.map((product, index) => (
+          <ProductCard
+            key={product.id || product._id || product.slug || `${product.name}-${offset}-${index}`}
+            product={product}
+            compact
+          />
+        ))}
+      </div>
+
+      {canShift ? (
+        <>
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className="absolute left-2 top-1/2 z-10 h-11 w-11 -translate-y-1/2 rounded-full bg-background/95 shadow-sm"
+            disabled={offset === 0}
+            aria-label="Xem san pham truoc"
+            onClick={() => setOffset(0)}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className="absolute right-2 top-1/2 z-10 h-11 w-11 -translate-y-1/2 rounded-full bg-background/95 shadow-sm"
+            disabled={offset > 0}
+            aria-label="Xem san pham tiep theo"
+            onClick={() => setOffset(2)}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function FeaturedProductTabs({
+  tabs,
+  loading,
+}: {
+  tabs: Array<{
+    id: string;
+    label: string;
+    href: string;
+    products: Product[];
+  }>;
+  loading: boolean;
+}) {
+  const [activeTab, setActiveTab] = useState(tabs[0]?.id ?? "");
+  const active = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
+
+  useEffect(() => {
+    if (!tabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(tabs[0]?.id ?? "");
+    }
+  }, [activeTab, tabs]);
+
+  if (!active) return null;
+
+  return (
+    <section className="grid gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-normal">San pham noi bat</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Chon nhanh nhom san pham ban muon xem.</p>
+        </div>
+        <div className="flex overflow-x-auto rounded-md border bg-card p-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={[
+                "h-9 shrink-0 rounded px-3 text-sm font-semibold transition-colors",
+                active.id === tab.id
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              ].join(" ")}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <ProductCarouselGrid products={active.products} loading={loading} />
+
+      <div className="flex justify-center">
+        <Button asChild variant="link" className="text-base font-semibold">
+          <Link href={active.href}>Xem tat ca</Link>
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function CategoryProductSection({
   title,
-  description,
+  bannerImage,
+  href,
   products,
   loading,
 }: {
   title: string;
-  description?: string;
+  bannerImage?: string;
+  href: string;
   products: Product[];
   loading: boolean;
 }) {
   return (
-    <HomeSection title={title} description={description} actionHref="/products">
-      {loading ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <LoadingSkeleton key={index} className="h-64 w-full" />
-          ))}
+    <section className="overflow-hidden rounded-md bg-muted/60 p-3 md:p-4">
+      <div className="grid gap-3">
+        {bannerImage ? (
+          <div className="rounded-md bg-muted">
+            <Link
+              href={href}
+              className="relative block h-28 w-full overflow-hidden rounded-md bg-card md:h-32 lg:w-[41.666%]"
+            >
+              <Image
+                src={bannerImage}
+                alt={title}
+                fill
+                unoptimized
+                sizes="(min-width: 1024px) 30vw, 100vw"
+                className="object-contain"
+              />
+            </Link>
+          </div>
+        ) : (
+          <div className="flex min-h-24 items-center rounded-md bg-card px-4">
+            <h2 className="text-2xl font-bold tracking-normal">{title}</h2>
+          </div>
+        )}
+
+        <ProductCarouselGrid products={products} loading={loading} />
+
+        <div className="flex justify-center">
+          <Button asChild variant="link" className="text-base font-semibold">
+            <Link href={href}>Xem tat ca</Link>
+          </Button>
         </div>
-      ) : products.length > 0 ? (
-        <ProductGrid products={products} compact />
-      ) : (
-        <EmptyState
-          title="Chua co san pham"
-          description="Danh sach san pham se hien thi khi backend tra ve du lieu."
-        />
-      )}
-    </HomeSection>
+      </div>
+    </section>
   );
 }
 
@@ -430,13 +610,32 @@ export function HomePage() {
         safeData(bannerService.getBanners(), []),
         safeData(categoryService.getCategoryTree(), []),
         safeData(
-          productService.getProducts({ sort: "best_selling", limit: 10 }),
+          productService.getProducts({ sort: "best_selling", limit: 14 }),
           [],
         ),
-        safeData(productService.getProducts({ sort: "newest", limit: 10 }), []),
+        safeData(productService.getProducts({ sort: "newest", limit: 14 }), []),
         safeData(promotionService.getPromotions({ limit: 6 }), []),
         safeData(storeService.getStores({ limit: 3 }), []),
       ]);
+
+      if (!mounted) return;
+
+      const categoryProductSections = await Promise.all(
+        flattenCategories(categories)
+          .filter((category) => category.productCount !== 0)
+          .map(async (category) => {
+            const categoryKey = category.slug || String(category.id || category._id || "");
+            const products = await safeData(
+              productService.getProducts({ category: categoryKey, limit: 14 }),
+              [],
+            );
+
+            return {
+              category,
+              products,
+            };
+          }),
+      );
 
       if (!mounted) return;
 
@@ -445,6 +644,7 @@ export function HomePage() {
         categories,
         bestSellingProducts,
         newestProducts,
+        categoryProductSections: categoryProductSections.filter((section) => section.products.length > 0),
         promotions,
         stores,
       });
@@ -469,8 +669,32 @@ export function HomePage() {
         product,
       ]),
     );
-    return Array.from(uniqueProducts.values()).slice(0, 10);
+    return Array.from(uniqueProducts.values()).slice(0, 14);
   }, [homeData.bestSellingProducts, homeData.newestProducts]);
+
+  const featuredProductTabs = useMemo(
+    () => [
+      {
+        id: "best-selling",
+        label: "San pham ban chay",
+        href: "/products?sort=best_selling",
+        products: homeData.bestSellingProducts,
+      },
+      {
+        id: "newest",
+        label: "San pham moi",
+        href: "/products?sort=newest",
+        products: homeData.newestProducts,
+      },
+      {
+        id: "suggested",
+        label: "Goi y hom nay",
+        href: "/products",
+        products: suggestedProducts,
+      },
+    ],
+    [homeData.bestSellingProducts, homeData.newestProducts, suggestedProducts],
+  );
 
   const heroBanners = useMemo(() => {
     const homeTopBanners = getBannersByPosition(homeData.banners, "HOME_TOP");
@@ -489,26 +713,22 @@ export function HomePage() {
       <HeroBannerCarousel banners={heroBanners} loading={loading} />
       <StoreSelection stores={homeData.stores} loading={loading} />
       <CategoryGrid categories={homeData.categories} loading={loading} />
-      <ProductSection
-        title="San pham ban chay"
-        description="Nhung mat hang duoc khach hang mua nhieu"
-        products={homeData.bestSellingProducts}
+      <FeaturedProductTabs
+        tabs={featuredProductTabs}
         loading={loading}
       />
+      {homeData.categoryProductSections.map((section) => (
+        <CategoryProductSection
+          key={section.category.id || section.category._id || section.category.slug}
+          title={section.category.name}
+          bannerImage={getCategoryBannerImage(section.category)}
+          href={getCategoryHref(section.category)}
+          products={section.products}
+          loading={loading}
+        />
+      ))}
       <MiddleBanner banner={middleBanner} />
-      <ProductSection
-        title="San pham moi"
-        description="Hang moi len ke trong ngay"
-        products={homeData.newestProducts}
-        loading={loading}
-      />
       <PromotionSection promotions={homeData.promotions} loading={loading} />
-      <ProductSection
-        title="Goi y hom nay"
-        description="Lua chon phu hop cho gio hang hien tai"
-        products={suggestedProducts}
-        loading={loading}
-      />
     </div>
   );
 }

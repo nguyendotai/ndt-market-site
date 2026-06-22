@@ -37,7 +37,7 @@ const getProductImage = (product: Product) => {
 };
 
 const getProductVariants = (product: Product) => {
-  const variants = product.productVariants?.length ? product.productVariants : product.variants;
+  const variants = product.variants?.length ? product.variants : product.productVariants;
   return variants ?? [];
 };
 
@@ -58,7 +58,10 @@ const buildVariantPreviewItems = (products: Product[], seed = 0) => {
       const variants = getProductVariants(product);
       const variant = variants.length ? variants[(index + seed) % variants.length] : undefined;
       const variantName = variant?.name || variant?.value || variant?.barcode || variant?.sku;
-      const price = variant?.salePrice ?? variant?.price ?? product.price ?? 0;
+      const salePrice = typeof variant?.salePrice === "number" && variant.salePrice > 0
+        ? variant.salePrice
+        : undefined;
+      const price = salePrice ?? variant?.price ?? product.price ?? 0;
       const image = variant?.imageUrl || variant?.image || variant?.images?.[0] || getProductImage(product) || fallbackProductImage;
 
       return {

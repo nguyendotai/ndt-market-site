@@ -1,5 +1,12 @@
 export type ProductStatus = "DRAFT" | "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK";
 export type ProductVariantStatus = "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK";
+export type ProductType = "SIMPLE" | "COMBO";
+export type ProductSaleType = "UNIT_PRODUCT" | "PACKAGED_WEIGHT_PRODUCT" | "WEIGHT_BASED_PRODUCT";
+export type ProductInventoryType = "UNIT" | "WEIGHT";
+export type ProductSellUnit = "PIECE" | "PACK" | "CAN" | "KILOGRAM" | string;
+export type ProductInventoryUnit = "PIECE" | "GRAM" | string;
+export type ProductPackageWeightUnit = "GRAM" | "KILOGRAM" | string;
+export type ProductBarcodeType = "FIXED" | "SCALE_WEIGHT" | "SCALE_PRICE";
 
 export type ProductCategoryRef =
   | string
@@ -34,6 +41,22 @@ export type ProductImage = {
   imageUrl: string;
   isThumbnail?: boolean;
   sortOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ProductComboItem = {
+  _id?: string;
+  id?: string;
+  comboProduct?: string | Product;
+  product: string | Product;
+  variant?: string | ProductVariant;
+  quantity: number;
+  quantityBase?: number;
+  unitLabel?: string;
+  sortOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type Product = {
@@ -42,16 +65,12 @@ export type Product = {
   slug?: string;
   name: string;
   sku?: string;
+  productType?: ProductType;
   description?: string;
   shortDescription?: string;
-  ingredients?: string;
+  ingredients?: string | string[];
   category: ProductCategoryRef;
   brand?: ProductBrandRef;
-  price?: number;
-  compareAtPrice?: number;
-  discountLabel?: string;
-  promoNote?: string;
-  badge?: string;
   unit: string;
   origin?: string;
   storageInstruction?: string;
@@ -60,14 +79,20 @@ export type Product = {
   soldCount?: number;
   ratingAverage?: number;
   ratingCount?: number;
-  inStock?: boolean;
-  stock?: number;
   variants?: ProductVariant[];
   productVariants?: ProductVariant[];
   images?: Array<string | ProductImage>;
+  comboItems?: ProductComboItem[];
   thumbnail?: string;
   image?: string;
   imageUrl?: string;
+  price?: number;
+  compareAtPrice?: number;
+  discountLabel?: string;
+  promoNote?: string;
+  badge?: string;
+  inStock?: boolean;
+  stock?: number;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -81,14 +106,27 @@ export type ProductVariant = {
   barcode?: string;
   name: string;
   value?: string;
+  image?: string;
+  imageUrl?: string;
+  images?: string[];
+  saleType?: ProductSaleType;
+  inventoryType?: ProductInventoryType;
+  sellUnit?: ProductSellUnit;
+  inventoryUnit?: ProductInventoryUnit;
+  conversionRateToInventoryUnit?: number;
+  packageWeight?: number;
+  packageWeightUnit?: ProductPackageWeightUnit;
   price?: number;
   salePrice?: number;
   compareAtPrice?: number;
   weight?: number;
   unit?: string;
-  image?: string;
-  imageUrl?: string;
-  images?: string[];
+  allowDecimalQuantity?: boolean;
+  minOrderQuantity?: number;
+  maxOrderQuantity?: number;
+  stepQuantity?: number;
+  barcodeType?: ProductBarcodeType;
+  pluCode?: string;
   inStock?: boolean;
   stock?: number;
   status?: ProductVariantStatus;

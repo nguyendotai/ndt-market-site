@@ -8,6 +8,7 @@ export type CategoryDto = {
   slug: string;
   description?: string;
   banner?: string;
+  bannerImage?: string;
   image?: string;
   imageUrl?: string;
   icon?: string;

@@ -23,17 +23,24 @@ export function CartLineItem({
 }) {
   const dispatch = useAppDispatch();
   const syncing = useAppSelector((state) => state.cart.status === "syncing");
-  const maxReached = item.stock !== undefined && item.quantity >= item.stock;
+  const displayQuantity = item.displayQuantity ?? item.quantity;
+  const basePerDisplay =
+    item.quantityBase && displayQuantity > 0 ? item.quantityBase / displayQuantity : undefined;
+  const maxReached =
+    item.stock !== undefined &&
+    (item.quantityBase !== undefined ? item.quantityBase >= item.stock : displayQuantity >= item.stock);
   const unavailable = item.inStock === false || item.stock === 0;
 
   const updateQuantity = (quantity: number) => {
     if (quantity < 1) return;
+    const quantityBase = basePerDisplay ? Math.round(quantity * basePerDisplay) : undefined;
     void dispatch(
       updateCartItem({
         itemId: item.id,
         productId: item.productId,
         variantId: item.variantId,
         quantity,
+        quantityBase,
       }),
     );
   };
@@ -99,14 +106,14 @@ export function CartLineItem({
               size="icon"
               variant="ghost"
               className="h-9 w-9 rounded-none"
-              disabled={syncing || item.quantity <= 1}
+              disabled={syncing || displayQuantity <= 1}
               aria-label={`Giam so luong ${item.name}`}
-              onClick={() => updateQuantity(item.quantity - 1)}
+              onClick={() => updateQuantity(displayQuantity - 1)}
             >
               <Minus className="h-4 w-4" />
             </Button>
             <span className="flex h-9 min-w-10 items-center justify-center border-x px-2 text-sm font-semibold">
-              {item.quantity}
+              {displayQuantity}
             </span>
             <Button
               type="button"
@@ -115,12 +122,12 @@ export function CartLineItem({
               className="h-9 w-9 rounded-none"
               disabled={syncing || maxReached || unavailable}
               aria-label={`Tang so luong ${item.name}`}
-              onClick={() => updateQuantity(item.quantity + 1)}
+              onClick={() => updateQuantity(displayQuantity + 1)}
             >
               <Plus className="h-4 w-4" />
             </Button>
           </div>
-          <p className="shrink-0 font-semibold">{formatCurrency(item.price * item.quantity)}</p>
+          <p className="shrink-0 font-semibold">{formatCurrency(item.price * displayQuantity)}</p>
         </div>
 
         <div className="mt-2 min-h-5 text-xs">

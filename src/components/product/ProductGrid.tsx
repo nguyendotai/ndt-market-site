@@ -15,7 +15,7 @@ type ProductGridItem = {
 
 export function ProductGrid({ products, className, compact = false }: ProductGridProps) {
   const items: ProductGridItem[] = products.flatMap((product) => {
-    const variants = product.productVariants?.length ? product.productVariants : product.variants;
+    const variants = product.variants?.length ? product.variants : product.productVariants;
 
     if (!variants?.length) {
       return [{ product }];

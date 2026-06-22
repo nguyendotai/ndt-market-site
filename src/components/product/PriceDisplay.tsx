@@ -9,13 +9,15 @@ export type PriceDisplayProps = {
 };
 
 export function PriceDisplay({ price, unit, compareAtPrice, className }: PriceDisplayProps) {
+  const visibleCompareAtPrice =
+    compareAtPrice && compareAtPrice > price ? compareAtPrice : undefined;
+
   return (
     <div className={cn("flex flex-wrap items-baseline gap-2", className)}>
       <span className="font-semibold text-primary">{formatCurrency(price)}</span>
-      {unit ? <span className="text-sm text-muted-foreground">/ {unit}</span> : null}
-      {compareAtPrice ? (
+      {visibleCompareAtPrice ? (
         <span className="text-sm text-muted-foreground line-through">
-          {formatCurrency(compareAtPrice)}
+          {formatCurrency(visibleCompareAtPrice)}
         </span>
       ) : null}
     </div>
